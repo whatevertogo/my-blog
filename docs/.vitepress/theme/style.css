@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /**
  * Claude API Docs 风格定制 (深色极简风格)
  */
