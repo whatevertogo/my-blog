@@ -4,7 +4,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: "我的技术博客",
   description: "记录技术与生活，沉淀项目文档",
-  // base: '/your-repo-name/', // 如果部署到对应仓库地址，请配置为对应仓库名
+  base: '/my-blog/', // 配置为目标仓库名
   
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
