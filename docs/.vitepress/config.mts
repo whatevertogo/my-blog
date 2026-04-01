@@ -9,10 +9,10 @@ export default defineConfig({
   
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
+    siteTitle: "我的技术博客",
     nav: [
-      { text: '首页', link: '/' },
-      { text: '博客', link: '/blog/' },
-      { text: '项目文档', link: '/projects/' }
+      { text: '最新发布', link: '/' },
+      { text: '关于', link: '/projects/' }
     ],
 
     sidebar: {

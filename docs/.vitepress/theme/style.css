@@ -32,8 +32,28 @@
   /* 移除 VitePress 默认的所有圆角效果，达成全页面 "直角" 极简风 */
   --vp-custom-block-font-size: 14px;
 }
-
-/* ==== 修复博客文章正文区的样式偏好 (VitePress 文章覆盖) ==== */
+  /* ==== VitePress 自带 Layout 及导航栏覆写为纯白纸张风格 ==== */
+  .VPNav {
+    border-bottom: 1px solid var(--vp-c-divider) !important;
+    background-color: var(--vp-c-bg) !important;
+  }
+  .VPNavBar {
+    background-color: var(--vp-c-bg) !important;
+  }
+  .VPNavBar.has-sidebar .divider {
+    display: none !important;
+  }
+  .VPSidebar {
+    background-color: var(--vp-c-bg) !important;
+    border-right: 1px solid var(--vp-c-divider) !important;
+  }
+  .VPDoc {
+    background-color: var(--vp-c-bg) !important;
+  }
+  .VPContent {
+    background-color: var(--vp-c-bg) !important;
+  }
+  /* ==== 修复博客文章正文区的样式偏好 (VitePress 文章覆盖) ==== */
 .vp-doc {
   color: var(--vp-c-text-1);
 }

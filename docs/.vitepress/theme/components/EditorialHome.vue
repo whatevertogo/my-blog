@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
+import { withBase } from 'vitepress';
 import { data as realPosts } from '../../../blog/posts.data.mts'; // 使用 VitePress 生成的真实数据
 
 // === 数据来源替换为真实 Markdown 数据 ===
@@ -119,7 +120,7 @@ const filteredPosts = computed(() => {
               <time class="font-sans text-xs uppercase tracking-widest text-ink-faint min-w-[120px] tabular-nums pt-1">
                 {{ post.date }}
               </time>
-              <a :href="post.url">
+              <a :href="withBase(post.url)">
                 <h2 class="font-serif text-3xl font-bold text-ink group-hover:text-brand transition-colors leading-tight cursor-pointer">
                   {{ post.title }}
                 </h2>
