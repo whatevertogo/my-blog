@@ -1,58 +1,32 @@
 <script setup>
 import { ref, computed } from 'vue';
+import { data as realPosts } from '../../../blog/posts.data.mts'; // 使用 VitePress 生成的真实数据
 
+// === 数据来源替换为真实 Markdown 数据 ===
+// 我们从 realPosts (这是 VitePress 在构建时自动爬取的所有博客) 中提取数据
+const posts = realPosts.map(post => ({
+  id: post.url, // url 是唯一标识
+  title: post.title,
+  date: post.date ? new Date(post.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' }) : '',
+  author: 'whatevertogo', // 默认作者一致
+  summary: post.excerpt || '这篇文章暂无摘要与预览，点击阅读完整内容。',
+  category: post.category || 'Uncategorized',
+  tags: post.tags || [],
+  url: post.url // 提供跳转链接
+}));
+
+// 从文章中自动提取所有的类别和子类别（可选：简化为单层）
 const categories = [
-  { name: 'AI Agents', subcategories: ['Subagent 架构', '记忆系统'] },
-  { name: 'Game Engine Dev', subcategories: ['Unity', 'C# Toolchain'] },
-  { name: 'Rust Projects', subcategories: [] },
-  { name: 'CLI Tools', subcategories: [] }
-];
+  ...new Set(posts.map(p => p.category).filter(Boolean))
+].map(c => ({ name: c, subcategories: [] }));
 
-const mockPosts = [
-  {
-    id: 1,
-    title: '构建具有长程记忆的自动化 Agent 系统',
-    date: 'Apr 01, 2026',
-    author: 'whatevertogo',
-    summary: '探讨如何基于本地文件系统和向量数据库，为大语言模型赋予跨越多次会话的持久化记忆能力。本文深入分析了不同层级记忆域的架构设计。',
-    category: 'AI Agents',
-    tags: ['Memory System', 'LLM', 'Architecture']
-  },
-  {
-    id: 2,
-    title: 'Rust 在命令行工具开发中的最佳实践',
-    date: 'Mar 28, 2026',
-    author: 'whatevertogo',
-    summary: '相较于传统的 Bash 脚本或 Python，Rust 提供了无与伦比的性能与类型安全。这篇指南涵盖了 Clap、Serde 等核心库的使用，以及如何打包分发二进制文件。',
-    category: 'CLI Tools',
-    tags: ['Rust', 'CLI', 'Performance']
-  },
-  {
-    id: 3,
-    title: '深入浅出：Unity DOTS 与面向数据的编程范式',
-    date: 'Mar 15, 2026',
-    author: 'whatevertogo',
-    summary: '传统 OOP 在处理海量实体时遇到性能瓶颈。本文通过一个具体的寻路算法案例，解析 Unity Data-Oriented Technology Stack (DOTS) 如何将 CPU 缓存命中率推向极致。',
-    category: 'Game Engine Dev',
-    tags: ['Unity', 'DOTS', 'C#', 'Optimization']
-  },
-  {
-    id: 4,
-    title: '设计一个可扩展的 Subagent 并行协作框架',
-    date: 'Feb 10, 2026',
-    author: 'whatevertogo',
-    summary: '当单个模型无法处理复杂任务时，我们需要引入层级化 Agent 架构。本研究提出了一种基于消息总线和状态机的非阻塞式异步分发系统。',
-    category: 'AI Agents',
-    tags: ['Multi-Agent', 'Concurrency', 'System Design']
-  }
-];
+const hotTags = [...new Set(posts.flatMap(p => p.tags))].slice(0, 5); // 提取前5个常用 Tag
 
-const hotTags = ['LLM', 'Rust', 'Architecture', 'Unity'];
 const activeCategory = ref(null);
 const searchQuery = ref('');
 
 const filteredPosts = computed(() => {
-  return mockPosts.filter((post) => {
+  return posts.filter((post) => {
     const matchesCategory = activeCategory.value ? post.category === activeCategory.value : true;
     const searchLower = searchQuery.value.toLowerCase();
     const matchesSearch =
@@ -145,9 +119,11 @@ const filteredPosts = computed(() => {
               <time class="font-sans text-xs uppercase tracking-widest text-ink-faint min-w-[120px] tabular-nums pt-1">
                 {{ post.date }}
               </time>
-              <h2 class="font-serif text-3xl font-bold text-ink group-hover:text-brand transition-colors leading-tight cursor-pointer">
-                {{ post.title }}
-              </h2>
+              <a :href="post.url">
+                <h2 class="font-serif text-3xl font-bold text-ink group-hover:text-brand transition-colors leading-tight cursor-pointer">
+                  {{ post.title }}
+                </h2>
+              </a>
             </div>
             
             <div class="flex flex-col md:flex-row gap-4 md:gap-8">
