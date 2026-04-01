@@ -7,7 +7,7 @@ tags: ["agent"]
 
 # {{ $frontmatter.title }}
 
-claude code 中的QueryEngine
+Claude code 中的QueryEngine
 
 ## ref 与 reactive 的选择
 
