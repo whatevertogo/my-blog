@@ -1,5 +1,5 @@
 ---
-title: "claude code 的 agent loop"
+title: "Claude code 的 QueryEngine"
 date: 2026-04-02T 0:500:17Z
 category: "claude code"
 tags: ["agent"]
@@ -7,10 +7,29 @@ tags: ["agent"]
 
 # {{ $frontmatter.title }}
 
-Claude code 中的QueryEngine
+说是QueryEngine(搜索引擎),其实我更想叫他agent loop，也就是所有智能体的核心
 
-## ref 与 reactive 的选择
+## QueryEngine在什么时候使用？
 
+```markdown
+
+外部调用入口
+    │
+    ├── ask() 函数 [QueryEngine.ts:1186-1295]
+    │   ├── new QueryEngine(config)
+    │   │   └── 克隆文件状态缓存 (cloneFileStateCache)
+    │   ├── engine.submitMessage(prompt, options)
+    │   │   └── yield* engine.submitMessage(...)
+    │   └── finally: setReadFileCache(engine.getReadFileState())
+    │
+    └── 直接使用 QueryEngine 类
+        ├── new QueryEngine(config)
+        └── for await (const msg of engine.submitMessage(prompt))
+                └── 处理每个 SDKMessage
+
+```
+
+## QueryEngine的设计
 
 ```markdown
 QueryEngine (类)
