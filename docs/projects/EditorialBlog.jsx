@@ -132,7 +132,7 @@ const SearchHero = ({ categoryContext, searchQuery, setSearchQuery }) => {
         />
       </div>
       <div className="flex items-center gap-3 mt-4 text-sm font-sans text-stone-500">
-        <span>Trending:</span>
+        <span>Tags:</span>
         {hotTags.map(tag => (
            <button key={tag} className="border border-stone-300 px-2 py-0.5 hover:bg-stone-900 hover:text-stone-100 transition-colors">
              {tag}
