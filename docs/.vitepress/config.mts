@@ -5,6 +5,7 @@ export default defineConfig({
   title: "我的技术博客",
   description: "记录技术与生活，沉淀项目文档",
   base: '/my-blog/', // 配置为目标仓库名
+  appearance: 'dark', // 强制或默认开启深色模式以契合极简深色风格
   
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config

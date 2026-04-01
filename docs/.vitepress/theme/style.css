@@ -1,0 +1,87 @@
+/**
+ * Claude API Docs 风格定制 (深色极简风格)
+ */
+:root {
+  /* 亮色模式下的主要强调色：有点类似 Claude 的 Logo 偏珊瑚/细沙色 */
+  --vp-c-brand-1: #d4a373;
+  --vp-c-brand-2: #cc9966;
+  --vp-c-brand-3: #b3804d;
+  
+  /* 字体设置：更现代、干净的无衬线字体 */
+  --vp-font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  --vp-font-family-mono: "Fira Code", "Menlo", "Consolas", monospace;
+}
+
+.dark {
+  /* 深色模式全局背景色：非常深的灰/黑，类似 Claude 官网的底层 */
+  --vp-c-bg: #18181A;
+  --vp-c-bg-alt: #1E1E20;
+  --vp-c-bg-elv: #252528;
+  
+  /* 文本颜色：主文本偏白（非纯白防刺眼），副文本偏浅灰 */
+  --vp-c-text-1: #EBEBEF;
+  --vp-c-text-2: #A0A0A5;
+  --vp-c-text-3: #707075;
+  
+  /* 分割线和边框颜色：微弱的边缘轮廓 */
+  --vp-c-divider: #2E2E32;
+  --vp-c-border: #333338;
+  
+  /* 品牌强调色（链接、悬浮等效果） */
+  --vp-c-brand-1: #E2B58D;
+  --vp-c-brand-2: #D4A373;
+  --vp-c-brand-3: #C28B55;
+
+  /* 自定义侧边栏选中态背景色，模拟文档选中的块状效果 */
+  --vp-c-bg-soft: #252528;
+}
+
+/* 针对博客文章列表的深度定制：使其呈现出更高级的卡片感 */
+.blog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+.post-item {
+  border: 1px solid var(--vp-c-border);
+  background-color: var(--vp-c-bg-alt);
+  padding: 1.5rem 1.8rem;
+  border-radius: 8px;
+  transition: border-color 0.3s ease, background-color 0.3s ease, transform 0.3s ease;
+  text-decoration: none;
+  display: block;
+}
+.post-item:hover {
+  border-color: var(--vp-c-brand-1);
+  background-color: var(--vp-c-bg-elv);
+  transform: translateY(-2px);
+}
+.post-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+  margin-bottom: 0.5rem;
+  text-decoration: none;
+}
+.post-item:hover .post-title {
+  color: var(--vp-c-brand-1);
+}
+.post-meta {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--vp-c-text-2);
+  margin-top: 0.8rem;
+  align-items: center;
+}
+.tag {
+  display: inline-block;
+  background-color: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-border);
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  margin-right: 0.5rem;
+  color: var(--vp-c-text-2);
+}
