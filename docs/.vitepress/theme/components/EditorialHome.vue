@@ -66,20 +66,20 @@ const filteredPosts = computed(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#FDFBF7] text-stone-800 font-sans flex selection:bg-stone-300 selection:text-stone-900">
-    <aside class="w-72 border-r border-stone-300 h-screen sticky top-0 overflow-y-auto px-6 py-8 hidden md:block shrink-0">
+  <div class="min-h-screen bg-paper text-ink font-sans flex selection:bg-paper-dark selection:text-ink">
+    <aside class="w-72 border-r border-paper-dark h-screen sticky top-0 overflow-y-auto px-6 py-8 hidden md:block shrink-0">
       <div class="mb-10">
-        <h1 class="font-serif text-2xl font-bold tracking-tight text-stone-900">whatevertogo</h1>
-        <p class="text-sm text-stone-500 mt-2 font-sans tracking-wide uppercase">Engineering & Notes</p>
+        <h1 class="font-serif text-2xl font-bold tracking-tight text-ink">whatevertogo</h1>
+        <p class="text-sm text-ink-light mt-2 font-sans tracking-wide uppercase">Engineering & Notes</p>
       </div>
 
       <nav class="font-sans text-sm">
-        <div class="mb-4 text-xs font-semibold text-stone-400 uppercase tracking-widest">Directory</div>
+        <div class="mb-4 text-xs font-semibold text-ink-faint uppercase tracking-widest">Directory</div>
         <ul class="flex flex-col gap-1">
           <li
             @click="activeCategory = null"
             class="py-2 px-3 cursor-pointer transition-colors duration-150"
-            :class="activeCategory === null ? 'bg-stone-200 text-stone-900 font-medium' : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'"
+            :class="activeCategory === null ? 'bg-paper-alt text-ink font-medium shadow-[rgba(0,0,0,0.05)_0px_2px_4px]' : 'text-ink-light hover:bg-paper-alt hover:text-ink'"
           >
             All Publications
           </li>
@@ -88,14 +88,14 @@ const filteredPosts = computed(() => {
             <div
               @click="activeCategory = cat.name"
               class="py-2 px-3 cursor-pointer transition-colors duration-150 flex items-center justify-between"
-              :class="activeCategory === cat.name ? 'bg-stone-200 text-stone-900 font-medium' : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'"
+              :class="activeCategory === cat.name ? 'bg-paper-alt text-ink font-medium shadow-[rgba(0,0,0,0.05)_0px_2px_4px]' : 'text-ink-light hover:bg-paper-alt hover:text-ink'"
             >
               <span>{{ cat.name }}</span>
-              <span v-if="cat.subcategories.length > 0" class="text-stone-300">+</span>
+              <span v-if="cat.subcategories.length > 0" class="text-paper-dark">+</span>
             </div>
 
-            <ul v-if="cat.subcategories.length > 0 && activeCategory === cat.name" class="pl-6 flex flex-col gap-1 mt-1 mb-2 border-l border-stone-200 ml-4">
-              <li v-for="sub in cat.subcategories" :key="sub" class="py-1 cursor-pointer text-stone-500 hover:text-stone-900 transition-colors">
+            <ul v-if="cat.subcategories.length > 0 && activeCategory === cat.name" class="pl-6 flex flex-col gap-1 mt-1 mb-2 border-l border-paper-dark ml-4">
+              <li v-for="sub in cat.subcategories" :key="sub" class="py-1 cursor-pointer text-ink-light hover:text-ink transition-colors">
                 — {{ sub }}
               </li>
             </ul>
@@ -104,48 +104,48 @@ const filteredPosts = computed(() => {
       </nav>
     </aside>
 
-    <main class="flex-1 max-w-5xl mx-auto px-6 py-8 md:px-12 md:py-12 w-full">
-      <div class="md:hidden flex items-center justify-between border-b border-stone-300 pb-4 mb-8">
-        <h1 class="font-serif text-xl font-bold text-stone-900">whatevertogo</h1>
-        <button class="border border-stone-300 px-3 py-1 text-sm font-medium uppercase tracking-wide">Menu</button>
+    <main class="flex-1 max-w-5xl mx-auto px-6 py-8 md:px-14 md:py-12 w-full">
+      <div class="md:hidden flex items-center justify-between border-b border-paper-dark pb-4 mb-8">
+        <h1 class="font-serif text-xl font-bold text-ink">whatevertogo</h1>
+        <button class="border border-paper-dark px-3 py-1 text-sm font-medium uppercase tracking-wide">Menu</button>
       </div>
 
-      <div class="mb-12 border-b border-stone-300 pb-8">
-        <div class="font-sans text-sm text-stone-500 mb-3 uppercase tracking-wide">
-          Search / {{ activeCategory ? activeCategory : 'Global' }}
+      <div class="mb-12 border-b border-paper-dark pb-8">
+        <div class="font-sans text-sm text-ink-faint mb-3 uppercase tracking-wide">
+          Search / <span class="font-medium text-ink">{{ activeCategory ? activeCategory : 'Global' }}</span>
         </div>
         <div class="relative">
-          <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="square" stroke-linejoin="miter" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
           </svg>
           <input
             type="text"
             v-model="searchQuery"
             placeholder="Search by keywords, tags, or concepts..."
-            class="w-full bg-transparent border border-stone-300 px-12 py-4 text-lg font-serif text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-stone-900 transition-colors rounded-none"
+            class="w-full bg-paper-alt/20 border border-paper-dark ps-14 pe-4 py-5 text-xl font-serif text-ink placeholder:text-ink-faint focus:outline-none focus:border-ink transition-colors rounded-none"
           />
         </div>
-        <div class="flex items-center gap-3 mt-4 text-sm font-sans text-stone-500">
+        <div class="flex items-center gap-3 mt-4 text-sm font-sans text-ink-light">
           <span>Trending:</span>
-          <button v-for="tag in hotTags" :key="tag" class="border border-stone-300 px-2 py-0.5 hover:bg-stone-900 hover:text-stone-100 transition-colors">
+          <button v-for="tag in hotTags" :key="tag" class="border border-paper-dark px-3 py-0.5 hover:bg-ink hover:text-paper transition-colors">
             {{ tag }}
           </button>
         </div>
       </div>
 
-      <div class="flex justify-between items-end mb-4 font-sans text-xs uppercase tracking-widest text-stone-500 border-b border-stone-300 pb-2">
+      <div class="flex justify-between items-end mb-4 font-sans text-xs uppercase tracking-widest text-ink-light border-b border-paper-dark pb-2">
         <span>{{ filteredPosts.length }} Results</span>
-        <span>Sort by: Latest ↓</span>
+        <span>Sort by: <span class="text-ink font-semibold cursor-pointer">Latest ↓</span></span>
       </div>
 
       <div class="flex flex-col">
         <template v-if="filteredPosts.length > 0">
-          <article v-for="post in filteredPosts" :key="post.id" class="py-8 border-b border-stone-300 last:border-b-0 group">
-            <div class="flex flex-col md:flex-row md:items-baseline gap-4 md:gap-8 mb-3">
-              <time class="font-sans text-xs uppercase tracking-widest text-stone-500 min-w-[120px] tabular-nums">
+          <article v-for="post in filteredPosts" :key="post.id" class="py-12 border-b border-paper-dark last:border-b-0 group">
+            <div class="flex flex-col md:flex-row md:items-baseline gap-4 md:gap-8 mb-5">
+              <time class="font-sans text-xs uppercase tracking-widest text-ink-faint min-w-[120px] tabular-nums pt-1">
                 {{ post.date }}
               </time>
-              <h2 class="font-serif text-2xl font-bold text-stone-900 group-hover:text-stone-600 transition-colors leading-tight cursor-pointer">
+              <h2 class="font-serif text-3xl font-bold text-ink group-hover:text-brand transition-colors leading-tight cursor-pointer">
                 {{ post.title }}
               </h2>
             </div>
@@ -153,22 +153,22 @@ const filteredPosts = computed(() => {
             <div class="flex flex-col md:flex-row gap-4 md:gap-8">
               <div class="hidden md:block min-w-[120px]"></div>
               <div>
-                <p class="font-serif text-stone-700 text-lg leading-relaxed mb-4 max-w-3xl">
+                <p class="font-serif text-ink-light text-lg leading-relaxed mb-6 max-w-3xl">
                   {{ post.summary }}
                 </p>
-                <div class="flex flex-wrap items-center gap-x-4 gap-y-2 font-sans text-xs text-stone-500 uppercase tracking-wider">
-                  <span class="font-bold text-stone-900 border-b border-stone-900 pb-0.5">{{ post.category }}</span>
-                  <span class="text-stone-300">|</span>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-2 font-sans text-[11px] text-ink-light uppercase tracking-widest">
+                  <span class="font-bold text-ink border-b border-ink pb-0.5">{{ post.category }}</span>
+                  <span class="text-paper-dark">|</span>
                   <template v-for="(tag, index) in post.tags" :key="tag">
-                    <span class="cursor-pointer hover:text-stone-900 transition-colors">{{ tag }}</span>
-                    <span v-if="index < post.tags.length - 1" class="text-stone-300">•</span>
+                    <span class="cursor-pointer hover:text-ink transition-colors">{{ tag }}</span>
+                    <span v-if="index < post.tags.length - 1" class="text-paper-dark">•</span>
                   </template>
                 </div>
               </div>
             </div>
           </article>
         </template>
-        <div v-else class="py-12 text-center text-stone-500 font-serif text-lg">
+        <div v-else class="py-16 text-center text-ink-faint font-serif text-xl border-b border-paper-dark">
           No publications matching your criteria.
         </div>
       </div>
