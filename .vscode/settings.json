@@ -1,0 +1,7 @@
+{
+  "css.lint.unknownAtRules": "ignore",
+  "tailwindcss.includeLanguages": {
+    "vue": "html",
+    "markdown": "html"
+  }
+}
