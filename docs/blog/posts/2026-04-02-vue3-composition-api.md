@@ -7,21 +7,28 @@ tags: ["agent"]
 
 # {{ $frontmatter.title }}
 
-claude code
+claude code 中的QueryEngine
 
 ## ref 与 reactive 的选择
 
-在实际项目中，`ref` 更适合基础类型的响应式数据，而 `reactive` 适合对象结构。两者各有优劣，关键在于使用场景。
 
-```typescript
-const count = ref(0)
-const user = reactive({ name: '张三', age: 25 })
+```markdown
+QueryEngine (类)
+├── 私有状态
+│   ├── config: QueryEngineConfig          # 配置对象（不可变引用）
+│   ├── mutableMessages: Message[]         # 可变消息数组（跨轮次持久化）
+│   ├── abortController: AbortController   # 中断控制器
+│   ├── permissionDenials: SDKPermissionDenial[]  # 权限拒绝记录
+│   ├── totalUsage: NonNullableUsage       # 累计 token 使用量
+│   ├── discoveredSkillNames: Set<string>  # 技能发现跟踪
+│   ├── loadedNestedMemoryPaths: Set<string>  # 已加载的嵌套记忆路径
+│   └── readFileState: FileStateCache      # 文件读取状态缓存
+│
+├── 公共方法
+│   ├── submitMessage()     # 提交消息并开始一轮对话（核心入口）
+│   ├── interrupt()         # 中断当前请求
+│   ├── getMessages()       # 获取消息历史
+│   ├── getReadFileState()  # 获取文件读取状态
+│   ├── getSessionId()      # 获取会话 ID
+│   └── setModel()          # 设置模型
 ```
-
-## 组合式函数（Composables）
-
-通过抽取可复用的逻辑到独立的 composables 中，我们可以在多个组件间共享状态和行为，替代了 Vue 2 时代的 Mixins 模式。
-
-::: tip 建议
-优先使用 composables 而非 Mixins，避免命名冲突和数据来源不清晰的问题。
-:::
