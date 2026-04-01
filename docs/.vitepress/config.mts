@@ -28,7 +28,12 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/vuejs/vitepress' }
+      { 
+        icon: {
+          svg: '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><image href="https://github.com/whatevertogo.png" width="24" height="24" preserveAspectRatio="xMidYMid slice" /></svg>'
+        }, 
+        link: 'https://github.com/whatevertogo' 
+      }
     ],
 
     search: {
