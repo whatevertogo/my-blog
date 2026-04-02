@@ -20,9 +20,6 @@ tags: ["agent"]
   是 QueryEngine 的一次性包装：创建引擎 → submitMessage() → 结束后回写文件缓存。适合不需要多轮对话的场景。
 ```
 
-
-
-
 ```markdown
 
 外部调用入口
@@ -79,16 +76,12 @@ QueryEngine (类)
     - 通过 processUserInput() 处理用户输入（支持斜杠命令）
     - 新消息推入 mutableMessages
     - 持久化 transcript — 在进入 API 循环前就写入，保证进程被杀后可 --resume
-```
 
-```markdown
  2. 用户输入处理
     - 通过 processUserInput() 处理用户输入（支持斜杠命令）
     - 新消息推入 mutableMessages
     - 持久化 transcript — 在进入 API 循环前就写入，保证进程被杀后可 --resume
-```
 
-```markdown
  3. 查询循环 (for await (const message of query({...})))
     - 调用核心 query() 函数与 Claude API 交互
     - 根据消息类型分发处理：
@@ -99,16 +92,12 @@ QueryEngine (类)
       - attachment — 处理 structured output、max_turns_reached、queued_command
       - system — 处理 compact_boundary（释放 GC）、snip replay、api_error 重试
       - tool_use_summary — 直接 yield 给 SDK
-```
 
-```markdown
-  4. 预算/限制检查（每轮循环末尾）
+4. 预算/限制检查（每轮循环末尾）
     - maxBudgetUsd 预算上限检查
     - structured output 重试次数限制检查
     - maxTurns 轮次上限（通过 attachment 信号）
-```
 
-```markdown
 5. 结果产出
     - 成功 → yield { type: 'result', subtype: 'success', ... }
     - 执行错误 → yield { type: 'result', subtype: 'error_during_execution', ... }（附带诊断信息）
