@@ -12,7 +12,7 @@ tags: ["agent"]
 
 ## QueryEngine在什么时候使用？
 
-在用户每一次对话之后启用，这意味着启动一次会话就是启动一个QueryEngine对象，也就是我们说的agentloop
+在用户每一次对话之后启用，这意味着启动一次会话就是启动一个QueryEngine对象，QueryEngine对象会在每次对话的时候启动一个agentloop
 
 ::: tip
 注：/btw就是QueryEngine的一次最小实现
