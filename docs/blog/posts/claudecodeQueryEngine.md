@@ -104,12 +104,12 @@ QueryEngine (类)
       - system — 处理 compact_boundary（释放 GC）、snip replay、api_error 重试
       - tool_use_summary — 直接 yield 给 SDK
 
-4. 预算/限制检查（每轮循环末尾）
+ 4. 预算/限制检查（每轮循环末尾）
     - maxBudgetUsd 预算上限检查
     - structured output 重试次数限制检查
     - maxTurns 轮次上限（通过 attachment 信号）
 
-5. 结果产出
+ 5. 结果产出
     - 成功 → yield { type: 'result', subtype: 'success', ... }
     - 执行错误 → yield { type: 'result', subtype: 'error_during_execution', ... }（附带诊断信息）
     - 预算超限 / 轮次超限 / 结构化输出重试耗尽 → 各自的 error result
@@ -119,7 +119,7 @@ QueryEngine (类)
 
 ###  QueryEngine — 会话编排层（Orchestrator）
 
-  负责"围绕" agent loop 的所有外围工作：
+  负责"围绕" queryloop(agent loop) 的所有外围工作：
 
   1. 构建系统提示词 — fetchSystemPromptParts(), memory prompt, 自定义 prompt
   2. 处理用户输入 — processUserInput()，支持斜杠命令
@@ -128,3 +128,89 @@ QueryEngine (类)
   5. 用量/预算追踪 — token 累计、maxBudgetUsd 检查、maxTurns 检查
   6. 权限追踪 — 包装 canUseTool 收集拒绝记录
   7. 结果产出 — 最终 yield 一个 { type: 'result', ... } 消息
+
+
+## 为什么要有QueryEngine
+
+```markdown
+  1. 把跨 turn 的状态封装成对象
+
+  在 QueryEngine 出现之前，所有这些状态散落在 print.ts 的闭包变量里（mutableMessages、readFileState、权限记录等），通过 ask() 函数的参数传来传去。
+
+  QueryEngine 把它们收拢成了一个对象的生命周期：
+
+  // 之前：print.ts 维护一堆散变量
+  let mutableMessages = []
+  let readFileState = ...
+  // 每次 ask() 传入，结束时回写
+  ask({ mutableMessages, getReadFileCache, setReadFileCache, ... })
+
+  // 之后：QueryEngine 持有状态
+  class QueryEngine {
+    private mutableMessages: Message[]
+    private readFileState: FileStateCache
+    private totalUsage: NonNullableUsage
+    private permissionDenials: SDKPermissionDenial[]
+    // ...
+  }
+
+  2. 支持多轮对话（多 turn 复用同一引擎）
+
+  这是核心动机。看注释（L176-183）：
+
+  ▎ One QueryEngine per conversation. Each submitMessage() call starts a new turn within the same conversation. State (messages, file cache, usage, etc.)      
+  persists across turns.
+
+  - SDK/Agent SDK 场景：外部代码创建一个 QueryEngine，多次调用 submitMessage()，消息和用量跨 turn 累积
+  - ask() 是一次性的：每次都 new QueryEngine() → submitMessage() → 丢弃，适合 REPL 里 "一发一收" 的简单场景
+
+  3. 提供中断和自省能力
+
+  interrupt()        // 外部中止当前查询
+  getMessages()      // 拿到当前对话全部消息
+  getReadFileState() // 拿到文件缓存
+  setModel(model)    // 动态切换模型
+
+  ask() 是个 generator，一旦结束就什么都没了。QueryEngine 作为对象，调用方可以在 turn 之间随时做这些操作。
+
+  为什么要写它？——三个驱动因素
+
+  ① Agent SDK 的需求
+
+  SDK 调用方（比如 Claude Desktop、第三方集成）需要：
+  - 一个对话持续多轮，不丢状态
+  - 随时 interrupt() 停掉当前生成
+  - 在 turn 之间切换模型、查询内部状态
+
+  这些用无状态的 ask() 函数做不到，必须提升为有状态对象。
+
+  ② 从 print.ts 解耦
+
+  print.ts 是 REPL 的入口，有 ~2200 行。把会话管理逻辑抽到 QueryEngine 后：
+  - print.ts 只负责 UI 交互、命令队列、stdin/stdout
+  - QueryEngine 只负责查询生命周期
+  - 职责清晰，各自可测试
+
+  ③ 为未来 REPL 重构做准备
+
+  注释说 "(in a future phase) the REPL"。目前 REPL（print.ts）还是通过 ask() 间接使用，但架构上已经预留了 REPL 直接用 QueryEngine 的路径——届时 REPL 也会变成   
+  "一个对话一个引擎" 的模式。
+
+  总结
+
+  ┌───────────────────────────────────┬───────────────────────────────┐
+  │           │       ask() 函数       │        QueryEngine 类         │
+  ├───────────────────────────────────┼───────────────────────────────┤
+  │ 生命周    │ 单次，用完即弃         │ 跨 turn 持久                  │
+  ├───────────────────────────────────┼───────────────────────────────┤
+  │ 使用方    │ REPL (print.ts)        │ SDK / Agent SDK               │
+  ├───────────────────────────────────┼───────────────────────────────┤
+  │ 状态管理  │ 靠外部闭包变量         │ 自持                          │
+  ├───────────────────────────────────┼───────────────────────────────┤
+  │ 中断/自省 │ 不支持                 │ interrupt(), getMessages() 等 │
+  ├───────────────────────────────────┼───────────────────────────────┤
+  │ 本质      │ QueryEngine 的便捷包装 │ 核心抽象                      │
+  └───────────────────────────────────┴───────────────────────────────┘
+
+  一句话：QueryEngine 是把 ask() 从"一次性的过程"升级为"有状态的对象"，让 SDK 调用方可以在同一个对话中多轮交互、随时控制。
+```
