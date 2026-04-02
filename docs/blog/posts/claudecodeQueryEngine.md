@@ -7,7 +7,8 @@ tags: ["agent"]
 
 # {{ $frontmatter.title }}
 
-说是QueryEngine(搜索引擎),其实我更想叫他agent loop，也就是所有智能体的核心
+说是QueryEngine(搜索引擎),其实我更想叫他agent loop启动器
+用户通过它来启动agentloop
 
 ## QueryEngine在什么时候使用？
 
@@ -20,7 +21,22 @@ tags: ["agent"]
   是 QueryEngine 的一次性包装：创建引擎 → submitMessage() → 结束后回写文件缓存。适合不需要多轮对话的场景。
 :::
 ```markdown
-外部调用入口
+用户输入
+  → QueryEngine.submitMessage()          [QueryEngine.ts:209]
+    → processUserInput()                  [utils/processUserInput/processUserInput.ts]
+    → fetchSystemPromptParts()            [utils/queryContext.ts]
+    → query()                             [query.ts:219]
+      → queryLoop()                       [query.ts:241]
+        → appendUserContext()             [utils/api.ts]
+        → addCacheBreakpoints()           [services/api/claude.ts:3061]
+        → API 调用                        [services/api/claude.ts:1697]
+        → 流式响应处理                     [services/api/claude.ts:1760+]
+        → 工具执行                         [services/tools/toolOrchestration.ts]
+        → autoCompact 检查                 [services/compact/autoCompact.ts]
+
+
+也可以说:
+  外部调用入口
     │
     ├── ask() 函数 [QueryEngine.ts:1186-1295]
     │   ├── new QueryEngine(config)
@@ -33,7 +49,6 @@ tags: ["agent"]
         ├── new QueryEngine(config)
         └── for await (const msg of engine.submitMessage(prompt))
                 └── 处理每个 SDKMessage
-
 ```
 
 ## QueryEngine的设计
@@ -99,3 +114,17 @@ QueryEngine (类)
     - 执行错误 → yield { type: 'result', subtype: 'error_during_execution', ... }（附带诊断信息）
     - 预算超限 / 轮次超限 / 结构化输出重试耗尽 → 各自的 error result
 ```
+
+## QueryEngine的作用
+
+###  QueryEngine — 会话编排层（Orchestrator）
+
+  负责"围绕" agent loop 的所有外围工作：
+
+  1. 构建系统提示词 — fetchSystemPromptParts(), memory prompt, 自定义 prompt
+  2. 处理用户输入 — processUserInput()，支持斜杠命令
+  3. 持久化 transcript — 在 API 调用前就写入，保证可 resume
+  4. 消息标准化与分发 — 把 query() yield 出来的内部消息转换成 SDKMessage 格式
+  5. 用量/预算追踪 — token 累计、maxBudgetUsd 检查、maxTurns 检查
+  6. 权限追踪 — 包装 canUseTool 收集拒绝记录
+  7. 结果产出 — 最终 yield 一个 { type: 'result', ... } 消息
