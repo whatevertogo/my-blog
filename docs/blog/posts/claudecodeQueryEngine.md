@@ -13,15 +13,13 @@ tags: ["agent"]
 
 在用户每一次对话之后启用，这意味着启动一次会话就是启动一个QueryEngine对象，也就是我们说的agentloop
 
+::: tip
 注：/btw就是QueryEngine的一次最小实现
-```markdown
   ask() 便捷函数（L1186）
 
   是 QueryEngine 的一次性包装：创建引擎 → submitMessage() → 结束后回写文件缓存。适合不需要多轮对话的场景。
-```
-
+:::
 ```markdown
-
 外部调用入口
     │
     ├── ask() 函数 [QueryEngine.ts:1186-1295]
@@ -69,9 +67,7 @@ QueryEngine (类)
     - 确定思考配置（adaptive / disabled）
     - 通过 fetchSystemPromptParts() 构建系统提示词
     - 注入 memory mechanics 提示词（如有自定义 system prompt + 环境变量覆盖）
-```
 
-```markdown
  1. 用户输入处理
     - 通过 processUserInput() 处理用户输入（支持斜杠命令）
     - 新消息推入 mutableMessages
