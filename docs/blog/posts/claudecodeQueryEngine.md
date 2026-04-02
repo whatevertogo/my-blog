@@ -51,3 +51,15 @@ QueryEngine (类)
 │   ├── getSessionId()      # 获取会话 ID
 │   └── setModel()          # 设置模型
 ```
+## QueryEngine的流程
+
+```markdown
+初始化阶段
+    - 包装 canUseTool 以追踪权限拒绝
+    - 确定模型（用户指定 / 默认 mainLoop 模型）
+    - 确定思考配置（adaptive / disabled）
+    - 通过 fetchSystemPromptParts() 构建系统提示词
+    - 注入 memory mechanics 提示词（如有自定义 system prompt + 环境变量覆盖）
+
+
+```
