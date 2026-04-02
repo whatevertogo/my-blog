@@ -214,3 +214,68 @@ QueryEngine (类)
 
   一句话：QueryEngine 是把 ask() 从"一次性的过程"升级为"有状态的对象"，让 SDK 调用方可以在同一个对话中多轮交互、随时控制。
 ```
+
+## queryloop()做了什么？
+
+```markdown
+
+queryLoop() 详解
+
+    queryLoop() 位于 query.ts:241，是 Claude Code 的核心 agent loop——一个 while(true) 循环（L307-L1728，约 1400 行）。
+
+    循环结构
+
+    每轮迭代的流程：
+
+    while (true) {
+      1. 准备消息（compact boundary 截取、content replacement、snip）
+      2. 调用 Claude API（流式）
+      3. 解析响应中的 tool_use
+      4. 执行工具
+      5. if (有工具调用且需要继续) → continue
+      6. if (没有工具调用 / stop_reason=end_turn) → break
+    }
+
+    关键机制
+
+    消息准备阶段（L365-520）：
+    - getMessagesAfterCompactBoundary() — 只取 compact boundary 之后的消息
+    - applyToolResultBudget() — 裁剪过大的工具输出
+    - snip projection / microcompact — 上下文压缩策略
+    - projectView() — 将内部消息投影成发给 API 的格式
+
+    API 调用与流式处理：
+    - 发送消息给 Claude，流式接收响应
+    - 每收到一个 content_block（text / tool_use）就 yield 出去
+    - 跟踪 stop_reason：end_turn 表示完成，tool_use 表示需要执行工具
+
+    工具执行：
+    - 解析 tool_use block，匹配注册的工具
+    - 通过 canUseTool 检查权限
+    - 执行工具，收集结果
+    - 将 tool_result 追加到消息列表，continue 进入下一轮
+
+    7 个 continue 站点：
+    这些是触发"再来一轮"的条件——每执行完一个工具就 continue，让模型看到工具结果后决定下一步。典型场景：
+    - L950: tool_use 执行完毕，继续
+    - L1115: 子 agent (AgentTool) 执行完毕，继续
+    - L1165: reactive compact 后继续
+    - L1220/1251: budget/token 相关恢复后继续
+    - L1305: 错误重试后继续
+    - L1340: 决策为 continue
+
+    退出条件（break）：
+    - stop_reason === 'end_turn' 且无工具调用 → 正常结束
+    - maxTurns 达到上限 → yield attachment 信号
+    - token budget 耗尽 → break
+    - 不可恢复的 API 错误 → throw
+
+    状态管理：
+    用 let state: State 对象管理跨迭代的可变状态（消息、turn 计数、compact 追踪等），每个 continue 站点用 state = { ...state, changedField } 更新。
+
+    总结
+
+    queryLoop() 就是一个经典的 ReAct loop（Reason + Act 循环）：模型思考 → 调用工具 → 观察结果 → 再思考，直到模型认为任务完成。QueryEngine
+    包在外面负责"装修"（提示词、持久化、格式化），queryLoop() 是真正的引擎。
+
+```
