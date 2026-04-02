@@ -114,16 +114,22 @@
 /* 代码高亮的无背景覆盖模式设置 */
 .vp-doc div[class*="language-"] {
   border: 1px solid var(--vp-c-border) !important;
+  overflow-x: hidden !important; /* 防止容器出现横向滚动条 */
 }
-.vp-doc div[class*="language-"] pre {
+.vp-doc div[class*="language-"] pre,
+.vp-doc div[class*="language-"] code,
+.vp-doc pre code {
   margin: 0 !important;
-  white-space: pre-wrap !important; /* 让代码块自动换行 */
-  word-wrap: break-word !important; /* 防止超出右侧边界 */
+  white-space: pre-wrap !important; /* 强制所有代码层级自动换行 */
+  word-wrap: break-word !important; 
+  word-break: break-all !important;
 }
 
-/* 防止长文本（如长按链接、无空格长字符串）撑出页面导致需要横向滑动 */
-.vp-doc p, 
-.vp-doc li, 
-.vp-doc a {
+/* 防止长文本撑满页面 */
+.vp-doc p,
+.vp-doc li,
+.vp-doc a,
+.vp-doc table {
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
