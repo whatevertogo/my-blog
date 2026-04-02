@@ -221,7 +221,8 @@ QueryEngine (类)
 
 queryLoop() 详解
 
-    queryLoop() 位于 query.ts:241，是 Claude Code 的核心 agent loop——一个 while(true) 循环（L307-L1728，约 1400 行）。
+    queryLoop() 位于 query.ts:241，是 Claude Code 的核心 agent loop——
+    一个 while(true) 循环（L307-L1728，约 1400 行）。
 
     循环结构
 
@@ -277,5 +278,27 @@ queryLoop() 详解
 
     queryLoop() 就是一个经典的 ReAct loop（Reason + Act 循环）：模型思考 → 调用工具 → 观察结果 → 再思考，直到模型认为任务完成。QueryEngine
     包在外面负责"装修"（提示词、持久化、格式化），queryLoop() 是真正的引擎。
+
+```
+
+## 我是这么想的
+
+Anthropic发现他们开始走错路了，开始只是根据agentloop写了一个agent，后来发现需求越来越多越来越多
+
+```markdown
+我觉得我写的更好的设计？
+
+  RuntimeService（门面）
+    ├── SessionState × N（会话运行态）
+    │     ├── AgentStateProjector（事件投影）
+    │     ├── SessionWriter（JSONL 持久化）
+    │     └── Broadcaster（SSE 扇出）
+    ├── AgentLoop（单 turn 编排）
+    │     ├── turn_runner（步循环）
+    │     ├── llm_cycle（LLM 调用）
+    │     └── tool_cycle（工具执行）
+    ├── CapabilityRouter（工具分发）
+    └── PolicyEngine（策略引擎）
+
 
 ```

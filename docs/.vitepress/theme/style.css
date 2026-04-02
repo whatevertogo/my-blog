@@ -117,4 +117,13 @@
 }
 .vp-doc div[class*="language-"] pre {
   margin: 0 !important;
+  white-space: pre-wrap !important; /* 让代码块自动换行 */
+  word-wrap: break-word !important; /* 防止超出右侧边界 */
+}
+
+/* 防止长文本（如长按链接、无空格长字符串）撑出页面导致需要横向滑动 */
+.vp-doc p, 
+.vp-doc li, 
+.vp-doc a {
+  overflow-wrap: anywhere;
 }
