@@ -1,26 +1,27 @@
 ---
-title: "Claude code 的 QueryEngine"
-date: 2026-04-02T 0:500:17Z
+title: "Claude Code 的 QueryEngine 深度解析"
+date: 2026-04-02T00:50:17Z
 category: "claude code"
-tags: ["agent"]
+tags: ["agent", "claude code", "架构分析", "源码解读"]
 ---
 
 # {{ $frontmatter.title }}
 
-说是QueryEngine(搜索引擎),其实我更想叫他agent loop启动器
-用户通过它来启动agentloop
+如果你用过 Claude Code，可能会好奇：当我输入一条消息后，Claude 是如何理解我的意图、调用工具、执行命令，并在多轮对话中保持上下文的？答案就是 **QueryEngine**。
 
-## QueryEngine在什么时候使用？
+说是 QueryEngine（查询引擎），其实它更像是 **Agent Loop 的启动器和管理器**。用户通过它来启动 Agent Loop，它与 Claude API 交互、管理工具执行、处理上下文压缩，并维护整个对话的生命周期。
 
-在用户每一次对话之后启用，这意味着启动一次会话就是启动一个QueryEngine对象，QueryEngine对象会在每次对话的时候启动一个agentloop
+## QueryEngine 在什么时候使用？
 
-::: tip
-注：/btw就是QueryEngine的一次最小实现
-  ask() 便捷函数（L1186）
+**每次用户与 Claude Code 对话时**，都会创建一个 QueryEngine 对象。一个 QueryEngine 实例对应一次完整的对话（conversation），而每次 `submitMessage()` 调用则对应对话中的一轮（turn）。
 
-  是 QueryEngine 的一次性包装：创建引擎 → submitMessage() → 结束后回写文件缓存。适合不需要多轮对话的场景。
+::: tip 实际例子
+`/btw` 命令就是 QueryEngine 的一次最小实现。它使用 `ask()` 便捷函数（`QueryEngine.ts:1186`），这是 QueryEngine 的一次性包装：创建引擎 → `submitMessage()` → 结束后回写文件缓存。适合不需要多轮对话的场景。
 :::
-```markdown
+
+### 调用链路
+
+```
 用户输入
   → QueryEngine.submitMessage()          [QueryEngine.ts:209]
     → processUserInput()                  [utils/processUserInput/processUserInput.ts]
@@ -33,27 +34,35 @@ tags: ["agent"]
         → 流式响应处理                     [services/api/claude.ts:1760+]
         → 工具执行                         [services/tools/toolOrchestration.ts]
         → autoCompact 检查                 [services/compact/autoCompact.ts]
-
-
-也可以说:
-  外部调用入口
-    │
-    ├── ask() 函数 [QueryEngine.ts:1186-1295]
-    │   ├── new QueryEngine(config)
-    │   │   └── 克隆文件状态缓存 (cloneFileStateCache)
-    │   ├── engine.submitMessage(prompt, options)
-    │   │   └── yield* engine.submitMessage(...)
-    │   └── finally: setReadFileCache(engine.getReadFileState())
-    │
-    └── 直接使用 QueryEngine 类
-        ├── new QueryEngine(config)
-        └── for await (const msg of engine.submitMessage(prompt))
-                └── 处理每个 SDKMessage
 ```
 
-## QueryEngine的设计
+### 两种使用方式
 
-```markdown
+```
+外部调用入口
+  │
+  ├── ask() 函数 [QueryEngine.ts:1186-1295]
+  │   ├── new QueryEngine(config)
+  │   │   └── 克隆文件状态缓存 (cloneFileStateCache)
+  │   ├── engine.submitMessage(prompt, options)
+  │   │   └── yield* engine.submitMessage(...)
+  │   └── finally: setReadFileCache(engine.getReadFileState())
+  │
+  └── 直接使用 QueryEngine 类
+      ├── new QueryEngine(config)
+      └── for await (const msg of engine.submitMessage(prompt))
+              └── 处理每个 SDKMessage
+```
+
+**`ask()` vs 直接使用 QueryEngine**：
+- `ask()` 是便捷函数，适合一次性问答场景
+- 直接使用 QueryEngine 适合需要多轮对话、保持状态的场景
+
+## QueryEngine 的设计
+
+### 核心类结构
+
+```typescript
 QueryEngine (类)
 ├── 私有状态
 │   ├── config: QueryEngineConfig          # 配置对象（不可变引用）
@@ -73,31 +82,213 @@ QueryEngine (类)
 │   ├── getSessionId()      # 获取会话 ID
 │   └── setModel()          # 设置模型
 ```
-## QueryEngine的流程
 
-```markdown
-初始化阶段
-    - 包装 canUseTool 以追踪权限拒绝
-    - 确定模型（用户指定 / 默认 mainLoop 模型）
-    - 确定思考配置（adaptive / disabled）
-    - 通过 fetchSystemPromptParts() 构建系统提示词
-    - 注入 memory mechanics 提示词（如有自定义 system prompt + 环境变量覆盖）
+### QueryEngineConfig 配置项
 
- 1. 用户输入处理
-    - 通过 processUserInput() 处理用户输入（支持斜杠命令）
-    - 新消息推入 mutableMessages
-    - 持久化 transcript — 在进入 API 循环前就写入，保证进程被杀后可 --resume
+`QueryEngineConfig` 是 QueryEngine 的配置对象，包含了运行所需的所有依赖和设置：
 
- 2. 用户输入处理
-    - 通过 processUserInput() 处理用户输入（支持斜杠命令）
-    - 新消息推入 mutableMessages
-    - 持久化 transcript — 在进入 API 循环前就写入，保证进程被杀后可 --resume
+| 配置项 | 类型 | 说明 |
+|--------|------|------|
+| `cwd` | string | 当前工作目录 |
+| `tools` | Tools | 可用工具集合 |
+| `commands` | Command[] | 斜杠命令列表 |
+| `mcpClients` | MCPServerConnection[] | MCP 服务器连接 |
+| `canUseTool` | CanUseToolFn | 工具权限检查函数 |
+| `initialMessages` | Message[] | 初始消息（用于恢复对话） |
+| `customSystemPrompt` | string | 自定义系统提示词 |
+| `userSpecifiedModel` | string | 用户指定的模型 |
+| `maxTurns` | number | 最大轮数限制 |
+| `maxBudgetUsd` | number | 最大预算（美元） |
 
- 3. 查询循环 (for await (const message of query({...})))
-    - 调用核心 query() 函数与 Claude API 交互
-    - 根据消息类型分发处理：
-      - assistant — 记录 stop_reason，推入消息，yield 标准化消息
-      - user — turn 计数 +1，推入消息
+## QueryEngine 的完整工作流程
+
+让我们通过一个实际场景来理解 QueryEngine 是如何工作的：
+
+**场景**：你在 Claude Code 中输入 "帮我重构 src/utils.ts 文件"。
+
+### 阶段 1：初始化
+
+```
+submitMessage() 被调用
+  │
+  ├── 1. 包装 canUseTool 以追踪权限拒绝
+  │   └── 记录哪些工具被拒绝，用于 SDK 报告
+  │
+  ├── 2. 确定模型和配置
+  │   ├── 模型：用户指定 or 默认 mainLoop 模型
+  │   └── 思考配置：adaptive / disabled
+  │
+  ├── 3. 构建系统提示词
+  │   ├── fetchSystemPromptParts() 获取工具定义、MCP 配置等
+  │   ├── 注入 memory mechanics 提示词（如启用）
+  │   └── 合并自定义提示词
+  │
+  └── 4. 加载技能和插件
+      ├── getSlashCommandToolSkills() 加载技能
+      └── loadAllPluginsCacheOnly() 加载插件（仅缓存）
+```
+
+### 阶段 2：用户输入处理
+
+```
+processUserInput() 处理用户输入
+  │
+  ├── 解析斜杠命令（如 /compact, /model 等）
+  ├── 处理附件（图片、文档等）
+  ├── 更新消息数组
+  └── 持久化 transcript（确保进程被杀后可 --resume）
+```
+
+**关键设计**：在进入 API 循环之前就写入 transcript，这是为了保证即使进程在 API 响应前被杀死，对话仍然可以恢复。
+
+### 阶段 3：查询循环（核心）
+
+```
+for await (const message of query({...}))
+  │
+  ├── 调用 query() 函数与 Claude API 交互
+  │   ├── 构建 API 请求（系统提示词 + 消息历史）
+  │   ├── 添加缓存断点（addCacheBreakpoints）
+  │   ├── 流式接收响应
+  │   └── 处理工具调用
+  │
+  ├── 根据消息类型分发处理：
+  │   ├── assistant → 记录 stop_reason，推入消息，yield 标准化消息
+  │   ├── user → turn 计数 +1，推入消息
+  │   ├── progress → 进度更新（工具执行中）
+  │   ├── attachment → 附件处理（文件内容、结构化输出等）
+  │   ├── stream_event → 流式事件（token 使用量更新）
+  │   └── system → 系统消息（压缩边界、API 错误重试等）
+  │
+  ├── 检查终止条件：
+  │   ├── 超过最大轮数（maxTurns）→ 返回错误
+  │   ├── 超过预算（maxBudgetUsd）→ 返回错误
+  │   └── 结构化输出重试超限 → 返回错误
+  │
+  └── 自动上下文压缩检查
+      └── 如果 token 使用量超过阈值，触发 compact
+```
+
+### 阶段 4：结果返回
+
+```
+查询循环结束
+  │
+  ├── 提取文本结果
+  │   └── 从最后一条 assistant 消息中提取文本内容
+  │
+  ├── 构建结果对象
+  │   ├── duration_ms: 总耗时
+  │   ├── duration_api_ms: API 耗时
+  │   ├── num_turns: 对话轮数
+  │   ├── total_cost_usd: 总成本
+  │   ├── usage: token 使用量
+  │   └── permission_denials: 权限拒绝记录
+  │
+  └── yield result 消息
+```
+
+## 关键设计决策
+
+### 1. 为什么使用 AsyncGenerator？
+
+`submitMessage()` 是一个异步生成器函数（`async *`），这意味着它可以：
+
+- **流式输出**：不需要等待整个对话完成，可以逐条 yield 消息
+- **保持状态**：生成器暂停时，所有局部变量都保持状态
+- **支持中断**：通过 `interrupt()` 方法可以中断生成器
+
+**实际场景**：当你在终端看到 Claude 逐字输出响应时，就是 AsyncGenerator 在逐条 yield 消息。
+
+### 2. 为什么 mutableMessages 是跨轮次持久化的？
+
+```typescript
+private mutableMessages: Message[]  // 跨轮次持久化
+```
+
+**原因**：一个 QueryEngine 实例对应一次完整的对话。每次 `submitMessage()` 只是对话中的一轮，需要保留之前的消息历史才能维持上下文。
+
+**对比**：
+- `ask()` 函数：一次性使用，用完即弃
+- QueryEngine 类：多轮对话，状态持久化
+
+### 3. Transcript 持久化策略
+
+```typescript
+// 在进入 API 循环前就写入 transcript
+if (persistSession && messagesFromUserInput.length > 0) {
+  const transcriptPromise = recordTranscript(messages)
+  if (isBareMode()) {
+    void transcriptPromise  // fire-and-forget
+  } else {
+    await transcriptPromise  // 等待写入完成
+  }
+}
+```
+
+**为什么这样设计？**
+
+如果进程在 API 响应前被杀死（比如用户在 Cowork 模式下点击 Stop），transcript 中只有用户消息，没有 API 响应。这样 `--resume` 功能可以找到对话记录并恢复。
+
+### 4. 权限拒绝追踪
+
+```typescript
+// 包装 canUseTool 以追踪权限拒绝
+const wrappedCanUseTool: CanUseToolFn = async (...) => {
+  const result = await canUseTool(...)
+  if (result.behavior !== 'allow') {
+    this.permissionDenials.push({
+      tool_name: sdkCompatToolName(tool.name),
+      tool_use_id: toolUseID,
+      tool_input: input,
+    })
+  }
+  return result
+}
+```
+
+**用途**：记录哪些工具调用被拒绝，最终在 result 消息中返回给 SDK 调用者。
+
+### 5. 压缩边界处理
+
+```typescript
+// 压缩边界消息：释放压缩前的消息以供 GC
+if (mutableBoundaryIdx > 0) {
+  this.mutableMessages.splice(0, mutableBoundaryIdx)
+}
+```
+
+**为什么需要？** 压缩后，旧的消息已经被摘要替代，不再需要保留。及时释放可以减少内存占用，特别是在长对话中。
+
+## QueryEngine 与 query.ts 的关系
+
+QueryEngine 和 query.ts 是两个不同层次的模块：
+
+| 维度 | QueryEngine | query.ts |
+|------|-------------|----------|
+| **职责** | 对话生命周期管理 | 单次 API 交互循环 |
+| **状态** | 跨轮次持久化 | 单次查询状态 |
+| **输入** | 用户消息（字符串） | 消息数组 + 系统提示词 |
+| **输出** | SDKMessage 流 | Message 流 |
+| **功能** | 权限、transcript、结果构建 | API 调用、工具执行、压缩检查 |
+
+**调用关系**：
+```
+QueryEngine.submitMessage()
+  └── query() [query.ts]
+        └── queryLoop()  // 核心 API 交互循环
+```
+
+## 总结
+
+QueryEngine 是 Claude Code 的核心组件之一，它：
+
+1. **管理对话生命周期**：一个实例对应一次完整对话
+2. **协调多轮交互**：通过 AsyncGenerator 实现流式输出
+3. **维护状态持久化**：消息历史、文件缓存、token 使用量
+4. **处理边界情况**：中断恢复、权限追踪、上下文压缩
+
+理解 QueryEngine 是理解 Claude Code 架构的关键第一步。
       - progress — inline 持久化防止 resume 时链断裂
       - stream_event — 追踪 token 用量（message_start/delta/stop）
       - attachment — 处理 structured output、max_turns_reached、queued_command
