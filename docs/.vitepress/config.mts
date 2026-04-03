@@ -16,7 +16,8 @@ export default defineConfig({
     siteTitle: "我的技术博客",
     nav: [
       { text: '最新发布', link: '/' },
-      { text: '关于', link: '/projects/' }
+      { text: '关于', link: '/projects/' },
+      { text: '友链', link: '/links/' }
     ],
 
     sidebar: {
@@ -26,6 +27,14 @@ export default defineConfig({
           items: [
             { text: '项目介绍', link: '/projects/' },
             { text: '快速开始', link: '/projects/quickstart' }
+          ]
+        }
+      ],
+      '/links/': [
+        {
+          text: '友链',
+          items: [
+            { text: '我的友链', link: '/links/mylinks' }
           ]
         }
       ]
