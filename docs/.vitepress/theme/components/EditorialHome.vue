@@ -25,6 +25,7 @@ const hotTags = [...new Set(posts.flatMap(p => p.tags))].slice(0, 5); // 提取�
 
 const activeCategory = ref(null);
 const searchQuery = ref('');
+const sidebarCollapsed = ref(false); // 控制侧边栏折叠状态
 
 const filteredPosts = computed(() => {
   return posts.filter((post) => {
@@ -38,48 +39,75 @@ const filteredPosts = computed(() => {
     return matchesCategory && matchesSearch;
   });
 });
+
+// 切换侧边栏折叠状态
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
+};
 </script>
 
 <template>
   <div class="min-h-screen bg-paper text-ink font-sans flex selection:bg-paper-dark selection:text-ink">
-    <aside class="w-72 border-r border-paper-dark h-screen sticky top-0 overflow-y-auto px-6 py-8 hidden md:block shrink-0">
-      <div class="mb-10">
-        <h1 class="font-serif text-2xl font-bold tracking-tight text-ink">whatevertogo</h1>
-        <p class="text-sm text-ink-light mt-2 font-sans tracking-wide uppercase">Engineering & Notes</p>
-      </div>
+    <aside
+      class="relative border-r border-paper-dark h-screen sticky top-0 overflow-y-auto px-6 py-8 hidden md:block shrink-0 transition-all duration-500 ease-in-out flex"
+      :class="sidebarCollapsed ? 'w-0 overflow-hidden border-r-0' : 'w-72'"
+    >
+      <div class="w-72 min-w-72">
+        <div class="mb-10">
+          <h1 class="font-serif text-2xl font-bold tracking-tight text-ink">whatevertogo</h1>
+          <p class="text-sm text-ink-light mt-2 font-sans tracking-wide uppercase">Engineering & Notes</p>
+        </div>
 
-      <nav class="font-sans text-sm">
-        <div class="mb-4 text-xs font-semibold text-ink-faint uppercase tracking-widest">Directory</div>
-        <ul class="flex flex-col gap-1">
-          <li
-            @click="activeCategory = null"
-            class="py-2 px-3 cursor-pointer transition-colors duration-150"
-            :class="activeCategory === null ? 'bg-paper-alt text-ink font-medium shadow-[rgba(0,0,0,0.05)_0px_2px_4px]' : 'text-ink-light hover:bg-paper-alt hover:text-ink'"
-          >
-            All Publications
-          </li>
-
-          <li v-for="cat in categories" :key="cat.name" class="flex flex-col">
-            <div
-              @click="activeCategory = cat.name"
-              class="py-2 px-3 cursor-pointer transition-colors duration-150 flex items-center justify-between"
-              :class="activeCategory === cat.name ? 'bg-paper-alt text-ink font-medium shadow-[rgba(0,0,0,0.05)_0px_2px_4px]' : 'text-ink-light hover:bg-paper-alt hover:text-ink'"
+        <nav class="font-sans text-sm">
+          <div class="mb-4 text-xs font-semibold text-ink-faint uppercase tracking-widest">Directory</div>
+          <ul class="flex flex-col gap-1">
+            <li
+              @click="activeCategory = null"
+              class="py-2 px-3 cursor-pointer transition-colors duration-150"
+              :class="activeCategory === null ? 'bg-paper-alt text-ink font-medium shadow-[rgba(0,0,0,0.05)_0px_2px_4px]' : 'text-ink-light hover:bg-paper-alt hover:text-ink'"
             >
-              <span>{{ cat.name }}</span>
-              <span v-if="cat.subcategories.length > 0" class="text-paper-dark">+</span>
-            </div>
+              All Publications
+            </li>
 
-            <ul v-if="cat.subcategories.length > 0 && activeCategory === cat.name" class="pl-6 flex flex-col gap-1 mt-1 mb-2 border-l border-paper-dark ml-4">
-              <li v-for="sub in cat.subcategories" :key="sub" class="py-1 cursor-pointer text-ink-light hover:text-ink transition-colors">
-                — {{ sub }}
-              </li>
-            </ul>
-          </li>
-        </ul>
-      </nav>
+            <li v-for="cat in categories" :key="cat.name" class="flex flex-col">
+              <div
+                @click="activeCategory = cat.name"
+                class="py-2 px-3 cursor-pointer transition-colors duration-150 flex items-center justify-between"
+                :class="activeCategory === cat.name ? 'bg-paper-alt text-ink font-medium shadow-[rgba(0,0,0,0.05)_0px_2px_4px]' : 'text-ink-light hover:bg-paper-alt hover:text-ink'"
+              >
+                <span>{{ cat.name }}</span>
+                <span v-if="cat.subcategories.length > 0" class="text-paper-dark">+</span>
+              </div>
+
+              <ul v-if="cat.subcategories.length > 0 && activeCategory === cat.name" class="pl-6 flex flex-col gap-1 mt-1 mb-2 border-l border-paper-dark ml-4">
+                <li v-for="sub in cat.subcategories" :key="sub" class="py-1 cursor-pointer text-ink-light hover:text-ink transition-colors">
+                  — {{ sub }}
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </nav>
+      </div>
     </aside>
 
-    <main class="flex-1 max-w-5xl mx-auto px-6 py-8 md:px-14 md:py-12 w-full">
+    <!-- 折叠按钮，固定在屏幕左上角 -->
+    <button
+      @click="toggleSidebar"
+      class="hidden md:flex fixed top-5 z-50 p-2 rounded-md transition-all duration-500 ease-in-out text-ink-faint hover:text-ink hover:bg-paper-alt"
+      :style="{ left: sidebarCollapsed ? '1.5rem' : '18rem' }"
+    >
+      <!-- 展开时显示左箭头，折叠时显示右箭头 -->
+      <svg v-if="sidebarCollapsed" class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+      </svg>
+      <svg v-else class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+    </button>
+
+    <main
+      class="flex-1 max-w-5xl mx-auto px-6 py-8 md:px-14 md:py-12 w-full transition-transform duration-500 ease-in-out"
+    >
       <div class="md:hidden flex items-center justify-between border-b border-paper-dark pb-4 mb-8">
         <h1 class="font-serif text-xl font-bold text-ink">whatevertogo</h1>
         <button class="border border-paper-dark px-3 py-1 text-sm font-medium uppercase tracking-wide">Menu</button>

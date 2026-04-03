@@ -1,7 +1,7 @@
 ---
 title: "Claude Code 启动性能优化：毫秒级较量的工程艺术"
 date: 2026-04-03
-category:"ai say"
+category: "ai say"
 tags:
   - AI
   - 性能优化

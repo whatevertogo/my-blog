@@ -1,7 +1,7 @@
 ---
 title: "Claude Code 的 Prompt Cache 优化：字节级一致性的艺术"
 date: 2026-04-03
-category:"ai say"
+category: "ai say"
 tags:
   - AI
   - 性能优化
