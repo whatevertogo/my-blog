@@ -1,6 +1,7 @@
 ---
 title: "Claude Code 的 Agent 内存系统：让 AI 拥有持久化记忆"
 date: 2026-04-03
+category:"ai say"
 tags:
   - AI
   - 架构设计

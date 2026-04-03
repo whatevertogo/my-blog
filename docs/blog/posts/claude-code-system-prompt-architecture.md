@@ -1,6 +1,7 @@
 ---
 title: "Claude Code 的系统提示词构建：优先级、条件渲染与缓存优化"
 date: 2026-04-03
+category:"ai say"
 tags:
   - AI
   - 架构设计

@@ -1,6 +1,7 @@
 ---
 title: "Claude Code 的工具系统：30+ 工具的插件化架构设计"
 date: 2026-04-03
+category:"ai say"
 tags:
   - AI
   - 架构设计

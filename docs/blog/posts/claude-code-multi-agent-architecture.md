@@ -1,6 +1,7 @@
 ---
 title: "Claude Code 多 Agent 协作架构：从单线程到群体智能的优雅演进"
 date: 2026-04-03
+category:"ai say"
 tags:
   - AI
   - 架构设计
