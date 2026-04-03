@@ -7,6 +7,10 @@ export default defineConfig({
   base: '/my-blog/', // 配置为目标仓库名
   appearance: false, // 关闭自带的深色模式，使用暖白纸张风格
   
+  head: [
+    ['link', { rel: 'icon', type: 'image/png', href: '/avatar.png' }],
+  ],
+  
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
     siteTitle: "我的技术博客",
