@@ -1,6 +1,6 @@
 ---
 title: "Claude Code 的时间基础微压缩：智能清理的艺术"
-date: 2026-04-03T14:30:00Z
+date: 2026-04-03
 category: "I say"
 tags: ["agent", "claude code", "上下文管理", "缓存优化", "源码分析"]
 ---

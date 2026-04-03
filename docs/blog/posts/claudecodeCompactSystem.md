@@ -1,6 +1,6 @@
 ---
 title: "Claude Code 的 CompactSystem 深度解析"
-date: 2026-04-03T13:07:56Z
+date: 2026-04-03
 category: "I say"
 tags: ["agent", "claude code", "上下文管理", "源码分析"]
 ---

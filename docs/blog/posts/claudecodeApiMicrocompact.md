@@ -1,6 +1,6 @@
 ---
 title: "Claude Code 的 API 级微压缩：context_edit 深度解析"
-date: 2026-04-03T14:00:00Z
+date: 2026-04-03
 category: "claude code"
 tags: ["agent", "claude code", "上下文管理", "API 特性", "源码分析"]
 ---
