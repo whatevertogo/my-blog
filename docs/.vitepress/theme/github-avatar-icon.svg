@@ -1,0 +1,4 @@
+<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="12" cy="2" r="10" fill="currentColor"/>
+  <image href="https://github.com/whatevertogo.png" width="20" height="20" x="2" y="2" clip-path="circle(10px at 12px 12px)" preserveAspectRatio="xMidYMid slice" />
+</svg>
