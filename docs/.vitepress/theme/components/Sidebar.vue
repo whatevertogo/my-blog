@@ -29,12 +29,26 @@ const selectCategory = (catName) => {
 </script>
 
 <template>
-  <div class="relative">
-    <!-- 折叠/展开按钮：贴在侧边栏右边界上 -->
+  <!-- 侧边栏容器：根据状态控制宽度 -->
+  <aside
+    class="
+      relative
+      hidden md:block flex-shrink-0
+      h-screen sticky top-0
+      transition-all duration-500 ease-in-out
+      z-40
+    "
+    :class="
+      isCollapsed
+        ? 'w-0 border-r-0'
+        : 'w-72 border-r border-paper-dark'
+    "
+  >
+    <!-- 折叠/展开按钮 -->
     <button
       @click="toggleCollapse"
       class="
-        hidden md:flex
+        flex
         items-center justify-center
         absolute top-8 z-50
         w-6 h-6
@@ -43,7 +57,11 @@ const selectCategory = (catName) => {
         text-ink-faint hover:text-ink hover:border-ink
         transition-all duration-500 ease-in-out
         shadow-sm hover:shadow
-        -right-3
+      "
+      :class="
+        isCollapsed
+          ? '-right-3 translate-x-full'
+          : '-right-3'
       "
     >
       <svg
@@ -62,17 +80,10 @@ const selectCategory = (catName) => {
       </svg>
     </button>
 
-    <!-- 侧边栏容器：折叠时宽度收缩到 0 -->
-    <aside
-      class="
-        hidden md:block
-        h-screen sticky top-0
-        overflow-hidden
-        transition-all duration-500 ease-in-out
-      "
-      :class="isCollapsed
-        ? 'w-0 border-r-0'
-        : 'w-72 border-r border-paper-dark'"
+    <!-- 内部内容遮罩区：折叠时隐藏内容 -->
+    <div
+      class="h-full overflow-hidden transition-all duration-500 ease-in-out"
+      :class="isCollapsed ? 'opacity-0 delay-0' : 'opacity-100 delay-200'"
     >
       <div class="w-72 h-full px-6 py-8 overflow-y-auto">
         <!-- Blog 标识 -->
@@ -144,6 +155,6 @@ const selectCategory = (catName) => {
           </ul>
         </nav>
       </div>
-    </aside>
-  </div>
+    </div>
+  </aside>
 </template>
