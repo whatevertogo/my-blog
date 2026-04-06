@@ -1,7 +1,7 @@
 ---
 title: "五大编程 AI 多 Agent 系统与 AgentTool 架构深度对比"
 date: 2026-04-06
-category: "ai say"
+category: "ai say and i say"
 tags:
   - AI 编程工具
   - 多Agent架构
@@ -33,14 +33,14 @@ description: "从 Agent 注册表到子 Agent 生命周期管理，从工具池�
 | 维度 | Claude Code | OpenCode | Codex | Kimi Code CLI | Pi-mono |
 |------|-------------|----------|-------|---------------|---------|
 | **语言** | TypeScript (Bun) | TypeScript | Rust | Python | TypeScript |
-| **Agent 类型** | 内置 Agent + 用户定义 Agent (YAML/MD) | 内置 Agent + 配置 Agent | 线程(Thread) + 内置 Agent | Agent YAML + SubAgent | Agent Session（隐式） |
-| **Agent 注册机制** | 内置 + `loadAgentsDir()` 动态加载 | `Config.get()` 合并用户配置 | `AgentRegistry` 注册表 | `LaborMarket` 注册表 | 无显式注册，通过 mode 切换 |
-| **多 Agent 并发** | ✔ 并行子 Agent + Swarm(团队) | ✔ Parallel tool 并发 | ✔ Thread 并发 + fork | ✘ 前台串行 + 后台异步 | ✘ 无多 Agent |
-| **Agent 隔离** | Worktree / Remote | 无 | Thread 隔离 + Rollout fork | Context 隔离 | 无 |
-| **背景运行** | ✔ 异步 Agent + TMUX | ✘ | ✔ 持久线程 | ✔ 后台线程 | ✘ |
+| **Agent 类型** | 内置 Agent + 用户定义 Agent (YAML/MD) | 内置 Agent + 配置 Agent | Thread(Thread) + 内置 Agent | Agent YAML + SubAgent | 扩展生成 Agent（无预定义类型） |
+| **Agent 注册机制** | 内置 + `loadAgentsDir()` 动态加载 | `Config.get()` 合并用户配置 | `AgentRegistry` 注册表 | `LaborMarket` 注册表 | `registerTool()` + 事件修改系统提示 |
+| **多 Agent 并发** | ✔ 并行子 Agent + Swarm(团队) | ✔ Parallel tool 并发 | ✔ Thread 并发 + fork | ✘ 前台串行 + 后台异步 | ✔ Session Fork + 扩展工具注册 |
+| **Agent 隔离** | Worktree / Remote | 无 | Thread 隔离 + Rollout fork | Context 隔离 | Session Fork 独立会话文件 |
+| **背景运行** | ✔ 异步 Agent + TMUX | ✘ | ✔ 持久线程 | ✔ 后台线程 | ✘（通过工具并发实现） |
 | **工具池组装** | `assembleToolPool()` 动态过滤 | `Tool.define()` 工厂 + 权限 | `ToolRegistry` trait 分发 | `KimiToolset` 动态导入 + 策略 | 工具直接注册 |
-| **工具权限** | 权限矩阵 + 模式(plan/edit) | 权限规则集(allow/deny/ask) | ExecPolicy + Sandbox | ToolPolicy(allowlist/inherit) | 无独立权限系统 |
-| **Agent 间通信** | TaskOutput + SendMessage | Agent 状态轮询 | Mailbox + 事件通知 | Wire 消息总线 | 无 |
+| **工具权限** | 权限矩阵 + 模式(plan/edit) | 权限规则集(allow/deny/ask) | ExecPolicy + Sandbox | ToolPolicy(allowlist/inherit) | 事件拦截 + `tool_call` hook |
+| **Agent 间通信** | TaskOutput + SendMessage | Agent 状态轮询 | Mailbox + 事件通知 | Wire 消息总线 | sendMessage() + sendUserMessage() |
 
 ---
 
@@ -468,47 +468,285 @@ def reset_current_approval_source():
 
 ---
 
-### 2.5 Pi-mono：无显式多 Agent，通过 Mode 切换实现
+### 2.5 Pi-mono：事件驱动的扩展系统，自由扩展 SubAgent
 
-Pi-mono 与其他四者不同——**它没有显式的多 Agent 系统**，而是通过 **Agent Session Mode** 切换来实现不同 Agent 行为。
+与前四个代码库不同，**Pi-mono 没有硬编码的多 Agent 注册表和 Agent 类型定义**，而是通过一套**完整的 TypeScript 扩展系统（Extension System）**实现了 Agent 能力的最大自由度扩展——包括自定义 subagent、工具、会话分支、命令等一切。
 
-#### Agent Session 模型
+#### 扩展系统核心架构
+
+Pi-mono 的扩展系统由三个层次组成：
+
+```
+ExtensionFactory (pi: ExtensionAPI) → Extension → ExtensionRunner → 事件驱动执行
+```
 
 ```typescript
-// src/core/agent-session.ts
-class AgentSession {
-    private currentMode: AgentMode;
-    private sessionState: SessionState;
-    
-    async switchMode(mode: AgentMode): Promise<void>;
-    async processMessage(message: UserMessage): Promise<void>;
+// packages/coding-agent/src/core/extensions/types.ts
+
+// 扩展工厂函数 — 用户代码的入口
+export type ExtensionFactory = (pi: ExtensionAPI) => void | Promise<void>;
+
+// ExtensionAPI — 扩展可以访问的完整能力
+export interface ExtensionAPI {
+    // === 事件订阅 ===
+    on(event: "session_start", handler: ...): void;
+    on(event: "agent_start", handler: ...): void;
+    on(event: "agent_end", handler: ...): void;
+    on(event: "tool_call", handler: ...): void;
+    on(event: "tool_result", handler: ...): void;
+    on(event: "before_agent_start", handler: ...): void;
+    on(event: "session_before_compact", handler: ...): void;
+    on(event: "session_before_fork", handler: ...): void;
+    // ... 共 25+ 种事件
+
+    // === 工具注册 ===
+    registerTool(tool: ToolDefinition): void;
+
+    // === 会话控制 ===
+    sendMessage(message: CustomMessage, options?): void;
+    sendUserMessage(content: string): void;
+    appendEntry<T>(customType: string, data?: T): void;
+
+    // === 扩展上下文操作 ===
+    // 这些 ctx.* 方法可在命令处理中使用
+    ctx.newSession(options?): Promise<{cancelled: boolean}>;
+    ctx.fork(entryId: string): Promise<{cancelled: boolean}>;
+    ctx.navigateTree(targetId: string, options?): Promise<{cancelled: boolean}>;
+    ctx.switchSession(sessionPath: string): Promise<{cancelled: boolean}>;
+
+    // === 模型管理 ===
+    registerProvider(name: string, config: ProviderConfig): void;
+    unregisterProvider(name: string): void;
+    setModel(model: Model<any>): Promise<boolean>;
+
+    // === 状态持久化 ===
+    setSessionName(name: string): void;
+    setLabel(entryId: string, label: string | undefined): void;
+    setThinkingLevel(level: ThinkingLevel): void;
 }
 ```
 
-#### Agent Mode 类型
+#### Session Fork — Pi-mono 的"SubAgent"机制
+
+Pi-mono 通过 **Session Fork** 实现类似 SubAgent 的能力：
 
 ```typescript
-// src/modes/index.ts
-enum AgentMode {
-    INTERACTIVE = "interactive",   // 交互式（主模式）
-    RPC = "rpc",                   // RPC 模式（编程接口）
-    PRINT = "print",              // 打印模式（非交互）
+interface ExtensionCommandContext extends ExtensionContext {
+    /** 从特定 entry fork，创建一个新会话文件 */
+    fork(entryId: string): Promise<{ cancelled: boolean }>;
+
+    /** 开始新会话，可选择指定父会话 */
+    newSession(options?: {
+        parentSession?: string;
+        setup?: (sessionManager: SessionManager) => Promise<void>;
+    }): Promise<{ cancelled: boolean }>;
+
+    /** 在会话树中导航（可携带摘要和自定义指令）*/
+    navigateTree(targetId: string, options?: {
+        summarize?: boolean;
+        customInstructions?: string;
+        replaceInstructions?: boolean;
+        label?: string;
+    }): Promise<{ cancelled: boolean }>;
 }
 ```
 
-每个 Agent Mode 有不同的：
-- 系统提示配置
-- 工具可用性
-- 输出格式
-- 交互行为
+Fork 事件可以被扩展拦截和定制：
 
-#### 没有 Sub-Agent 的影响
+```typescript
+interface SessionBeforeForkEvent {
+    type: "session_before_fork";
+    entryId: string;
+}
 
-Pi-mono 没有 Sub-Agent 意味着：
-- 任务必须**串行执行**（但工具可以批量操作，如 `edits` 数组）
-- 没有并行探索能力
-- 没有任务委派给子 Agent 的能力
-- 通过 **compaction** 管理上下文（而非子 Agent 结果回收）
+interface SessionBeforeForkResult {
+    cancel?: boolean;                  // 可取消 fork
+    skipConversationRestore?: boolean;  // 可跳过对话历史恢复
+}
+```
+
+#### 事件驱动的全生命周期拦截
+
+Pi-mono 的扩展系统覆盖了 Agent 的完整生命周期：
+
+```typescript
+// 事件时间线（从用户输入到 Agent 完成）
+InputEvent                    // 用户输入
+  → BeforeAgentStartEvent     // Agent 循环执行前（可修改 prompt、system prompt）
+    → AgentStartEvent         // Agent 开始
+      → ContextEvent          // LLM 调用前（可修改消息列表）
+        → TurnStartEvent      // 每一轮开始
+          → ToolCallEvent     // 工具调用前（可阻断/修改参数）
+          → ToolResultEvent   // 工具返回后（可修改结果）
+          → ToolExecution*Events // 工具执行事件流
+      → MessageStartEvent     // 消息开始
+      → MessageUpdateEvent    // 流式更新（token-by-token）
+      → MessageEndEvent       // 消息结束
+    → AgentEndEvent           // Agent 完成
+  → ...下一轮或结束
+```
+
+每个事件都有对应的 Result 类型，允许扩展**拦截、修改甚至阻止**系统行为：
+
+```typescript
+// 在 Agent 开始前修改系统提示
+on("before_agent_start", async (event, ctx) => {
+    event.systemPrompt = customSystemPrompt;  // 替换系统提示
+    return { systemPrompt: customPrompt };
+});
+
+// 拦截工具调用，可阻断或修改参数
+on("tool_call", async (event, ctx) => {
+    if (event.toolName === "bash" && event.input.command.includes("rm -rf")) {
+        return { block: true, reason: "危险操作被扩展拦截" };
+    }
+    // 修改工具参数
+    if (event.toolName === "edit") {
+        event.input.oldText = normalizeText(event.input.oldText);
+    }
+});
+
+// 修改工具结果
+on("tool_result", async (event, ctx) => {
+    return {
+        content: [{ type: "text", text: sanitize(event.content) }],
+        isError: false,
+    };
+});
+```
+
+#### 动态工具注册
+
+扩展可以注册 LLM 可调用的自定义工具：
+
+```typescript
+export interface ToolDefinition<
+    TParams extends TSchema = TSchema,
+    TDetails = unknown,
+    TState = any
+> {
+    name: string;                           // LLM 调用的工具名
+    label: string;                          // UI 显示标签
+    description: string;                    // LLM 理解工具的描述
+    promptSnippet?: string;                 // 系统提示中的简短说明
+    promptGuidelines?: string[];            // 追加到系统提示 Guidelines
+    parameters: TParams;                    // TypeBox 参数.schema
+    prepareArguments?: (args: unknown) => Static<TParams>;
+    execute(
+        toolCallId: string,
+        params: Static<TParams>,
+        signal: AbortSignal | undefined,
+        onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
+        ctx: ExtensionContext,
+    ): Promise<AgentToolResult<TDetails>>;
+    renderCall?: (...) => Component;        // 自定义工具调用 UI
+    renderResult?: (...) => Component;       // 自定义工具结果 UI
+}
+
+// 使用示例
+api.registerTool({
+    name: "deploy_service",
+    label: "部署服务",
+    description: "将代码部署到指定的云服务环境",
+    parameters: Type.Object({
+        service: Type.String(),
+        environment: Type.Enum({ dev: "dev", staging: "staging", prod: "prod" }),
+    }),
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+        // 执行部署逻辑...
+        return {
+            content: [{ type: "text", text: "部署成功" }],
+            details: { serviceId: "123" },
+        };
+    },
+});
+```
+
+#### 扩展加载机制
+
+```typescript
+// packages/coding-agent/src/core/extensions/loader.ts
+
+// 虚拟模块系统（供扩展引用）
+const VIRTUAL_MODULES: Record<string, unknown> = {
+    "@mariozechner/pi-agent-core": piAgentCore,
+    "@mariozechner/pi-ai": piAi,
+    "@mariozechner/pi-tui": piTui,
+    "@mariozechner/pi-coding-agent": piCodingAgent,  // 完整的 Agent 接口
+    "@sinclair/typebox": typebox,                     // Schema 定义
+};
+
+// 使用 jiti 运行时加载扩展（支持 TypeScript 直接执行）
+const jiti = createJiti(import.meta.url, {
+    alias: getAliases(),
+    virtualModules: VIRTUAL_MODULES,  // 编译后的 Bun 二进制使用
+});
+```
+
+扩展通过配置发现并加载：
+
+```
+~/.pi-coding-agent/extensions/    # 用户全局扩展
+.project/.pi/extensions/          # 项目级扩展
+.builtin/extensions/              # 内置扩展
+```
+
+#### "SubAgent"在 Pi-mono 中是什么
+
+Pi-mono 的"SubAgent"本质上是通过扩展 + 事件 + Session Fork 实现的**自由组合能力**：
+
+| 能力 | 实现方式 |
+|------|----------|
+| 创建子 Agent | `ctx.newSession({ parentSession })` 或 `ctx.fork(entryId)` |
+| 子 Agent 通信 | `api.sendMessage()` + `api.sendUserMessage()` |
+| 子 Agent 隔离 | 独立 Session 文件 + 事件隔离 |
+| 子 Agent 上下文 | `fork` 自带对话历史继承 |
+| 自定义 Agent 类型 | 注册专属工具 + 修改 `before_agent_start` 系统提示 |
+| Agent 生命周期钩子 | `agent_start` / `agent_end` / `turn_start` / `turn_end` 事件 |
+| Agent 能力扩展 | `registerTool()` + `registerProvider()` + 事件拦截 |
+
+这使得 Pi-mono 的扩展自由度在所有五个系统中**最为灵活**——不局限于预定义的 Agent 类型，任何 TypeScript 代码都可以通过 `registerTool()` 添加新工具、通过事件监听拦截 Agent 行为、通过 Fork/newSession 创建会话分支。
+
+#### 会话树（Session Tree）
+
+Pi-mono 的 Session 组织成树状结构，扩展可以：
+
+```typescript
+interface TreePreparation {
+    targetId: string;
+    oldLeafId: string | null;
+    commonAncestorId: string | null;
+    entriesToSummarize: SessionEntry[];
+    userWantsSummary: boolean;
+    customInstructions?: string;       // 自定义摘要指令
+    replaceInstructions?: boolean;     // 替换而非追加
+    label?: string;                    // 分支标签
+}
+
+// 扩展可以拦截树导航并自定义摘要
+on("session_before_tree", async (event, ctx) => {
+    event.preparation.customInstructions = "重点关注架构变更";
+    return {
+        summary: {
+            summary: generateSummary(event.preparation.entriesToSummarize),
+            details: { ...customMetadata }
+        }
+    };
+});
+```
+
+#### 小结
+
+| 维度 | Pi-mono 的方式 | 其他系统的方式 |
+|------|--------------|---------------|
+| Agent 定义 | 通过系统提示修改 + 工具注册动态定义 | 预定义的类型（YAML/配置文件） |
+| 工具扩展 | `registerTool()` 即时注册 | 代码编译 + 重启 |
+| 会话分支 | `fork()` + Session Tree 原生支持 | 专用 Thread/Swarm 机制 |
+| 生命周期控制 | 25+ 事件，可拦截/修改/阻断 | 有限的钩子点 |
+| Agent 间通信 | `sendMessage()` + `sendUserMessage()` | 专用通道（Mailbox/Wire） |
+| 模型切换 | `registerProvider()` + `setModel()` | Agent YAML 中静态配置 |
+
+这是一个**面向扩展（extension-oriented）**的设计哲学——Pi-mono 认为 Agent 的能力不应该被固化为几种预定义的类型，而应该允许用户通过代码自由组合和扩展。
 
 ---
 
@@ -776,7 +1014,7 @@ Kim CLI 的 `run_with_summary_continuation` 和 Claude Code 的 `startAgentSumma
 | **Codex** | ★★★★☆ | 高 | 最高(Thread级) | 工程级多任务处理 |
 | **Kimi CLI** | ★★★☆☆ | 中 | 中(工具池/Context) | 探索+编码双模式 |
 | **OpenCode** | ★★☆☆☆ | 低 | 低(权限级) | 轻量级并行工具调用 |
-| **Pi-mono** | ★☆☆☆☆ | 最低 | 无 | 单 Agent 复杂任务 |
+| **Pi-mono** | ★★★★☆ | 中高 | 中(Session Fork) | TypeScript 扩展生态、自定义 Agent 类型 |
 
 **核心设计哲学**：
 
@@ -784,7 +1022,7 @@ Kim CLI 的 `run_with_summary_continuation` 和 Claude Code 的 `startAgentSumma
 - **Codex** 追求工程严谨——Thread 级隔离、Fork 模式、Mailbox 通信、深度/配额限制
 - **Kimi CLI** 追求实用——Foreground/Background 双模式、Wire 通信、摘要延续
 - **OpenCode** 追求极简——Agent 即配置、权限隔离、工具并发代替多 Agent
-- **Pi-mono** 追求专注——无多 Agent，通过批处理工具和上下文压缩实现复杂任务
+- **Pi-mono** 追求无限扩展——TypeScript Extension 系统、25+ 事件拦截、注册即生效的自由工具扩展
 
 多 Agent 系统的设计没有标准答案，只有对**复杂度、隔离性、灵活性**的不同权衡。
 
