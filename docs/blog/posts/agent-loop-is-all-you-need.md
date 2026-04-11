@@ -379,6 +379,131 @@ pub struct AgentLoop {
 
 核心循环被拆成三个独立模块：**turn_runner**（步循环编排）、**llm_cycle**（LLM 调用）、**tool_cycle**（工具执行）。
 
+### AgentLoop 是怎么被组装出来的？
+
+上面说了结构，但 AgentLoop 不是凭空出现的。我们来看看它从零到运行的完整组装流程，对比 Claude Code 的做法。
+
+**Claude Code 的组装**：所有东西塞进一个巨大的构造函数参数对象。
+
+```typescript
+// ask() 函数 — Claude Code 的组装方式
+const engine = new QueryEngine({
+  cwd, tools, commands, mcpClients, agents,
+  canUseTool, getAppState, setAppState,
+  initialMessages: mutableMessages,
+  readFileCache: cloneFileStateCache(getReadFileCache()),
+  customSystemPrompt, appendSystemPrompt,
+  userSpecifiedModel, fallbackModel, thinkingConfig,
+  maxTurns, maxBudgetUsd, taskBudget, jsonSchema,
+  verbose, handleElicitation, replayUserMessages,
+  includePartialMessages, setSDKStatus, abortController,
+  orphanedPermission,
+  // ... 还有 feature flag 控制的条件参数
+})
+```
+
+25+ 个参数一次性传入，没有分层，没有验证，没有中间状态。整个 QueryEngine 是一个"全有或全无"的对象——你要么给它所有东西，要么别创建它。
+
+**Astrcode 的组装**：分三层逐步构建，每层有明确的职责边界。
+
+```text
+第一层：RuntimeService（门面）— 持有全局状态
+  │
+  ├── sessions: DashMap<String, Arc<SessionState>>   // 会话存储
+  ├── loop_: RwLock<Arc<AgentLoop>>                  // Agent Loop（可热替换）
+  ├── surface: RwLock<RuntimeSurfaceState>            // 能力表面快照
+  ├── policy: Arc<dyn PolicyEngine>                   // 策略引擎
+  ├── approval: Arc<dyn ApprovalBroker>               // 审批代理
+  ├── config: Mutex<Config>                           // 运行时配置
+  └── observability: Arc<RuntimeObservability>        // 可观测性
+```
+
+```text
+第二层：build_agent_loop() — 用 Builder 模式组装
+  │
+  ├── AgentLoop::from_capabilities_with_prompt_inputs(
+  │     factory,           // LLM Provider 工厂
+  │     capabilities,      // 工具注册表
+  │     prompt_declarations, skill_catalog, prompt_builder  // Prompt 相关
+  │   )
+  │
+  ├── .with_policy_profile(active_profile)            // 策略配置
+  ├── .with_hook_handlers(hook_handlers)              // 生命周期钩子
+  ├── .with_max_tool_concurrency(...)                 // 并发度
+  ├── .with_auto_compact_enabled(...)                 // 自动压缩
+  ├── .with_compact_threshold_percent(...)             // 压缩阈值
+  ├── .with_tool_result_max_bytes(...)                 // 工具结果截断
+  ├── .with_compact_keep_recent_turns(...)             // 保留轮数
+  ├── .with_policy_engine(policy)                      // 策略引擎
+  └── .with_approval_broker(approval)                  // 审批代理
+```
+
+```text
+第三层：AgentLoop 内部初始化 — 每个字段创建独立组件
+  │
+  ├── PromptRuntime::new(PromptComposer::with_defaults(), ...)
+  ├── ContextRuntime::new(tool_result_max_bytes)
+  ├── CompactionRuntime::with_truncate_bytes(...)
+  ├── HookRuntime::default()
+  └── RequestAssembler
+```
+
+关键区别在于 **热替换**。Claude Code 的 QueryEngine 创建后就是固定的，想换工具列表？重新创建整个引擎。Astrcode 的 AgentLoop 存放在 `RwLock<Arc<AgentLoop>>` 里，运行时可以原子替换：
+
+```rust
+// loop_surface/service.rs — 运行时热替换 AgentLoop
+pub async fn replace_surface(&self, ...) -> ServiceResult<()> {
+    let _guard = self.runtime.rebuild_lock.lock().await;  // 加锁防止并发替换
+    let next_loop = build_agent_loop(&next_surface, ...); // 构建新的 AgentLoop
+    *self.runtime.loop_.write().await = next_loop;         // 原子替换
+    *self.runtime.surface.write().await = next_surface;    // 同步更新 surface 快照
+}
+```
+
+这意味着 MCP 服务器新连接、插件热加载、配置变更——所有这些都不需要重启服务，只需要 `replace_surface()` 构建一个新的 AgentLoop 并替换。正在运行的 turn 仍然持有旧的 `Arc<AgentLoop>`（引用计数保证安全），下一个 turn 自动使用新配置。
+
+用一个完整的图来对比两者的组装和运行流程：
+
+```text
+┌─ Claude Code ──────────────────────────────────────────────────────┐
+│                                                                     │
+│  ask() / submitMessage()                                           │
+│    │                                                                │
+│    ├── new QueryEngine({ 25+ params })   ← 全量构造，一次性完成     │
+│    │                                                                │
+│    └── queryLoop()                       ← 1400 行循环，所有逻辑内联│
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─ Astrcode ──────────────────────────────────────────────────────────┐
+│                                                                     │
+│  RuntimeService::from_runtime_services()                            │
+│    │                                                                │
+│    ├── RuntimeSurfaceState { capabilities, skills, hooks, ... }    │
+│    │       │                                                        │
+│    │       └── build_agent_loop(surface, config, deps)              │
+│    │               │                                                │
+│    │               ├── AgentLoop::from_capabilities(...)            │
+│    │               │       │                                        │
+│    │               │       └── 内部初始化 8 个组件                  │
+│    │               │                                                │
+│    │               └── .with_policy_engine() / .with_approval()    │
+│    │                       │                                        │
+│    │                       └── Arc<AgentLoop> 存入 RwLock           │
+│    │                                                                │
+│    └── submit_prompt() → run_turn(agent_loop, state, ...)           │
+│            │                                                        │
+│            ├── context.build_bundle()   ← ContextRuntime            │
+│            ├── prompt.build_plan()      ← PromptRuntime             │
+│            ├── request_assembler.build() ← RequestAssembler         │
+│            ├── llm_cycle::generate()    ← 独立模块                  │
+│            └── tool_cycle::execute()    ← 独立模块                  │
+│                                                                     │
+│  热替换路径: replace_surface() → build_agent_loop() → 原子替换     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
 ### 同样的五步，不同的实现深度
 
 我们用同样的五步框架来对比两个实现：
