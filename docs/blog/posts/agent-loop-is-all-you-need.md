@@ -341,9 +341,8 @@ state = next
 **Agent Loop 的概念是简单的。但把简单的事做到极致——这就是 Claude Code 出色的原因。**
 
 
-## Astrcode 的 Agent Loop：另一种设计哲学
+## Astrcode 的 Agent Loop
 
-上面我们分析了 Claude Code 的 `queryLoop()`——一个约 1400 行的 `while(true)` 巨型函数，把所有逻辑塞在一起。现在来看另一个实现：[Astrcode](https://github.com/anthropics/astrcode) 的 Agent Loop。它走了完全不同的路——**模块化、分层、可测试**。
 
 ### 架构对比：巨型函数 vs 组件化
 
