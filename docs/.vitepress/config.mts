@@ -43,7 +43,7 @@ export default defineConfig({
     socialLinks: [
       {
         icon: {
-          svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><foreignObject width="24" height="24"><img src="/avatar.png" width="24" height="24" style="border-radius:50%;object-fit:cover;"/></foreignObject></svg>'
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12"/></svg>'
         },
         link: 'https://github.com/whatevertogo',
         ariaLabel: 'GitHub'

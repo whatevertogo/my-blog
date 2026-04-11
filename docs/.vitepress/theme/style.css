@@ -125,6 +125,21 @@
   word-break: break-all !important;
 }
 
+/* 右上角头像图标 */
+.VPSocialLink svg {
+  fill: transparent !important;
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 50%;
+  background-image: url('/avatar.png');
+  background-size: cover;
+  background-position: center;
+}
+.VPSocialLink:hover svg {
+  transform: scale(1.1);
+  transition: transform 0.2s;
+}
+
 /* 防止长文本撑满页面 */
 .vp-doc p,
 .vp-doc li,
