@@ -341,366 +341,166 @@ state = next
 **Agent Loop 的概念是简单的。但把简单的事做到极致——这就是 Claude Code 出色的原因。**
 
 
-## Astrcode 的 Agent Loop
+## Astrcode 的 Agent Loop：为什么不能照搬 Claude Code
 
+Claude Code 的 `queryLoop()` 是一个约 1400 行的 `while(true)` 函数。它工作得很好——在 TypeScript + Node.js 单线程环境下。但如果你想把同样的架构搬到 Rust 里，你会遇到根本性的问题。
 
-### 架构对比：巨型函数 vs 组件化
+### 为什么 Rust 不能写 1400 行巨型循环
 
-Claude Code 的 `queryLoop()` 是一个函数扛下所有：
+**1. 所有权系统不允许零散的状态修改**
 
+Claude Code 的 `queryLoop()` 里到处是散变量和就地修改：
+
+```typescript
+// Claude Code — 散落在循环体各处的状态修改
+messages.push(assistantMessage)
+state = { ...state, transition: { reason: 'next_turn' } }
+pendingToolUseSummary = generateToolUseSummary(...)
+reactiveCompactAttempts++
 ```
-queryLoop() — 1400 行
-├── 消息准备（四级压缩）
-├── API 调用
-├── 流式解析
-├── 工具匹配
-├── 权限检查
-├── 错误重试
-├── 7 个 continue 站点
-└── State 管理
-```
 
-Astrcode 的 `AgentLoop` 是一个结构体，持有 8 个独立组件，每个组件各司其职：
+TypeScript 不管你什么时候改、在哪改、谁在改。Rust 的所有权系统会问：这个 `messages` 的可变引用是不是唯一？`state` 被 continue 传到下一轮后，旧引用还在吗？1400 行循环里有 7 个 continue 站点，每个都可能持有悬挂引用——编译器会让你把每个分支都证明清楚。
 
-```rust
-// agent_loop.rs — AgentLoop 结构体
-pub struct AgentLoop {
-    factory: DynProviderFactory,       // LLM Provider 工厂
-    capabilities: CapabilityRouter,    // 能力路由器（工具注册表）
-    policy: Arc<dyn PolicyEngine>,     // 策略引擎
-    approval: Arc<dyn ApprovalBroker>, // 审批代理
-    prompt: PromptRuntime,             // Prompt 运行时
-    context: ContextRuntime,           // Context 运行时
-    compaction: CompactionRuntime,     // Compaction 运行时
-    hooks: HookRuntime,                // 生命周期 hook
-    request_assembler: RequestAssembler, // 请求装配器
+**2. 错误处理不允许忽略边界**
+
+Claude Code 的错误恢复是隐式的——`try/catch` 捕获错误，然后根据类型决定是 `continue` 还是 `throw`：
+
+```typescript
+// Claude Code — 隐式错误分类
+try {
+  return await deps.callModel({ ...params, model: currentModel })
+} catch (error) {
+  if (isOverloaded(error) && fallbackModel) { ... }
+  throw error
 }
 ```
 
-核心循环被拆成三个独立模块：**turn_runner**（步循环编排）、**llm_cycle**（LLM 调用）、**tool_cycle**（工具执行）。
+Rust 没有 `try/catch`，只有 `Result<T, E>` 和 `?` 运算符。每个错误都必须显式处理——要么 `match`，要么 `?` 传播。如果你把 7 种错误恢复路径塞在一个函数里，`match` 的嵌套会让代码不可读。Astrcode 的做法是把错误恢复分散到 `turn_runner` 的结构化 `'step: loop` 里，每个 `continue` 对应一个明确的恢复路径。
 
-### AgentLoop 是怎么被组装出来的？
+**3. 并发模型完全不同**
 
-上面说了结构，但 AgentLoop 不是凭空出现的。我们来看看它从零到运行的完整组装流程，对比 Claude Code 的做法。
+Claude Code 跑在 Node.js 单线程上，不需要考虑并发安全。但 Rust 的 async 运行时（tokio）天然支持多任务并发，你需要处理：
 
-**Claude Code 的组装**：所有东西塞进一个巨大的构造函数参数对象。
+```rust
+// Astrcode — 同一 session 的并发提交保护
+let was_idle = session.running.swap(true, Ordering::SeqCst);
+if !was_idle { return Err(TurnConflict); }
+```
+
+这种问题在 Claude Code 里根本不存在——同一时刻只有一个事件循环在跑。
+
+**4. 编译时间 vs 重构代价**
+
+1400 行的泛型函数在 TypeScript 里改起来很快——改一处，跑一下，看报错。Rust 的编译时间不允许这种"试错式开发"。一个 1400 行的 async 函数改一行可能导致 30 秒的重编译。模块化拆分不是为了好看，是为了**让编译器只重编译改动的模块**。
+
+### Astrcode 的 Agent Loop 设计
+
+因为这些语言层面的约束，Astrcode 的 `AgentLoop` 走了完全不同的路——**8 个独立组件 + Builder 组装**。
+
+```rust
+pub struct AgentLoop {
+    factory: DynProviderFactory,       // LLM Provider 工厂
+    capabilities: CapabilityRouter,    // 工具注册表
+    policy: Arc<dyn PolicyEngine>,     // 策略引擎（trait，可插拔）
+    approval: Arc<dyn ApprovalBroker>, // 审批代理（trait，可插拔）
+    prompt: PromptRuntime,             // Prompt 组装
+    context: ContextRuntime,           // 上下文构建
+    compaction: CompactionRuntime,     // 压缩管理
+    hooks: HookRuntime,                // 生命周期钩子
+    request_assembler: RequestAssembler, // 请求装配
+}
+```
+
+这不是过度设计——是 Rust 的语言特性逼出来的最佳实践：
+
+| Rust 约束 | Astrcode 的应对 | Claude Code 为什么不需要 |
+|-----------|----------------|------------------------|
+| 所有权要求可变引用唯一 | 每个组件独立持有自己的状态 | 单线程，随便改 |
+| Result 必须显式处理 | 每个模块有明确的错误类型 | try/catch 隐式分类 |
+| 编译时间惩罚巨型函数 | 拆成独立 crate 并行编译 | V8 JIT 不需要编译 |
+| async 并发需要同步 | `RwLock<Arc<AgentLoop>>` + CancelToken | 单线程事件循环 |
+
+### 组装流程：Builder 模式 vs 巨大构造函数
+
+**Claude Code** 把 25+ 个参数一次性塞进构造函数：
 
 ```typescript
-// ask() 函数 — Claude Code 的组装方式
 const engine = new QueryEngine({
   cwd, tools, commands, mcpClients, agents,
   canUseTool, getAppState, setAppState,
-  initialMessages: mutableMessages,
-  readFileCache: cloneFileStateCache(getReadFileCache()),
   customSystemPrompt, appendSystemPrompt,
   userSpecifiedModel, fallbackModel, thinkingConfig,
   maxTurns, maxBudgetUsd, taskBudget, jsonSchema,
-  verbose, handleElicitation, replayUserMessages,
-  includePartialMessages, setSDKStatus, abortController,
-  orphanedPermission,
-  // ... 还有 feature flag 控制的条件参数
+  // ... 还有十几个参数
 })
 ```
 
-25+ 个参数一次性传入，没有分层，没有验证，没有中间状态。整个 QueryEngine 是一个"全有或全无"的对象——你要么给它所有东西，要么别创建它。
-
-**Astrcode 的组装**：分三层逐步构建，每层有明确的职责边界。
-
-```text
-第一层：RuntimeService（门面）— 持有全局状态
-  │
-  ├── sessions: DashMap<String, Arc<SessionState>>   // 会话存储
-  ├── loop_: RwLock<Arc<AgentLoop>>                  // Agent Loop（可热替换）
-  ├── surface: RwLock<RuntimeSurfaceState>            // 能力表面快照
-  ├── policy: Arc<dyn PolicyEngine>                   // 策略引擎
-  ├── approval: Arc<dyn ApprovalBroker>               // 审批代理
-  ├── config: Mutex<Config>                           // 运行时配置
-  └── observability: Arc<RuntimeObservability>        // 可观测性
-```
-
-```text
-第二层：build_agent_loop() — 用 Builder 模式组装
-  │
-  ├── AgentLoop::from_capabilities_with_prompt_inputs(
-  │     factory,           // LLM Provider 工厂
-  │     capabilities,      // 工具注册表
-  │     prompt_declarations, skill_catalog, prompt_builder  // Prompt 相关
-  │   )
-  │
-  ├── .with_policy_profile(active_profile)            // 策略配置
-  ├── .with_hook_handlers(hook_handlers)              // 生命周期钩子
-  ├── .with_max_tool_concurrency(...)                 // 并发度
-  ├── .with_auto_compact_enabled(...)                 // 自动压缩
-  ├── .with_compact_threshold_percent(...)             // 压缩阈值
-  ├── .with_tool_result_max_bytes(...)                 // 工具结果截断
-  ├── .with_compact_keep_recent_turns(...)             // 保留轮数
-  ├── .with_policy_engine(policy)                      // 策略引擎
-  └── .with_approval_broker(approval)                  // 审批代理
-```
-
-```text
-第三层：AgentLoop 内部初始化 — 每个字段创建独立组件
-  │
-  ├── PromptRuntime::new(PromptComposer::with_defaults(), ...)
-  ├── ContextRuntime::new(tool_result_max_bytes)
-  ├── CompactionRuntime::with_truncate_bytes(...)
-  ├── HookRuntime::default()
-  └── RequestAssembler
-```
-
-关键区别在于 **热替换**。Claude Code 的 QueryEngine 创建后就是固定的，想换工具列表？重新创建整个引擎。Astrcode 的 AgentLoop 存放在 `RwLock<Arc<AgentLoop>>` 里，运行时可以原子替换：
+**Astrcode** 用 Builder 模式分层组装，每层只关心自己的配置：
 
 ```rust
-// loop_surface/service.rs — 运行时热替换 AgentLoop
-pub async fn replace_surface(&self, ...) -> ServiceResult<()> {
-    let _guard = self.runtime.rebuild_lock.lock().await;  // 加锁防止并发替换
-    let next_loop = build_agent_loop(&next_surface, ...); // 构建新的 AgentLoop
-    *self.runtime.loop_.write().await = next_loop;         // 原子替换
-    *self.runtime.surface.write().await = next_surface;    // 同步更新 surface 快照
-}
+AgentLoop::from_capabilities_with_prompt_inputs(factory, capabilities, ...)
+    .with_policy_profile(active_profile)           // 策略配置
+    .with_hook_handlers(hook_handlers)             // 生命周期钩子
+    .with_auto_compact_enabled(...)                // 压缩配置
+    .with_policy_engine(policy)                    // 策略引擎
+    .with_approval_broker(approval)                // 审批代理
 ```
 
-这意味着 MCP 服务器新连接、插件热加载、配置变更——所有这些都不需要重启服务，只需要 `replace_surface()` 构建一个新的 AgentLoop 并替换。正在运行的 turn 仍然持有旧的 `Arc<AgentLoop>`（引用计数保证安全），下一个 turn 自动使用新配置。
+Builder 模式在 Rust 中不只是风格偏好——它是**用类型系统保证构造完整性**的方式。`from_capabilities()` 返回一个缺少 policy 的 `AgentLoop`，你可以先配置 compaction 再配 policy，编译器保证你不会忘记某个必填项。而 Claude Code 的构造函数参数都是 optional 的——忘了传 `canUseTool`？运行时才知道。
 
-用一个完整的图来对比两者的组装和运行流程：
+### 热替换：Rust 给了 Claude Code 做不到的能力
 
-```text
-┌─ Claude Code ──────────────────────────────────────────────────────┐
-│                                                                     │
-│  ask() / submitMessage()                                           │
-│    │                                                                │
-│    ├── new QueryEngine({ 25+ params })   ← 全量构造，一次性完成     │
-│    │                                                                │
-│    └── queryLoop()                       ← 1400 行循环，所有逻辑内联│
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌─ Astrcode ──────────────────────────────────────────────────────────┐
-│                                                                     │
-│  RuntimeService::from_runtime_services()                            │
-│    │                                                                │
-│    ├── RuntimeSurfaceState { capabilities, skills, hooks, ... }    │
-│    │       │                                                        │
-│    │       └── build_agent_loop(surface, config, deps)              │
-│    │               │                                                │
-│    │               ├── AgentLoop::from_capabilities(...)            │
-│    │               │       │                                        │
-│    │               │       └── 内部初始化 8 个组件                  │
-│    │               │                                                │
-│    │               └── .with_policy_engine() / .with_approval()    │
-│    │                       │                                        │
-│    │                       └── Arc<AgentLoop> 存入 RwLock           │
-│    │                                                                │
-│    └── submit_prompt() → run_turn(agent_loop, state, ...)           │
-│            │                                                        │
-│            ├── context.build_bundle()   ← ContextRuntime            │
-│            ├── prompt.build_plan()      ← PromptRuntime             │
-│            ├── request_assembler.build() ← RequestAssembler         │
-│            ├── llm_cycle::generate()    ← 独立模块                  │
-│            └── tool_cycle::execute()    ← 独立模块                  │
-│                                                                     │
-│  热替换路径: replace_surface() → build_agent_loop() → 原子替换     │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### 同样的五步，不同的实现深度
-
-我们用同样的五步框架来对比两个实现：
-
-#### 步骤 1：agent 得到输入
-
-**Claude Code** 的做法是在 `queryLoop()` 内联四级压缩管线。
-
-**Astrcode** 把输入准备拆成三个独立阶段：
+Claude Code 的 QueryEngine 创建后就是固定的。想换工具列表？重新创建整个引擎。Astrcode 用 `RwLock<Arc<AgentLoop>>` 实现运行时热替换：
 
 ```rust
-// turn_runner.rs — 输入准备阶段
-
-// 1. ContextRuntime 构建上下文包（含消息裁剪、工具结果截断）
-let bundle = agent_loop.context.build_bundle(state, ContextBundleInput { ... })?;
-
-// 2. PromptRuntime 组装系统提示词，生成 plan
-let build_output = agent_loop.prompt.build_plan(state, &bundle.conversation, ...).await?;
-
-// 3. RequestAssembler 最终装配，将 plan + context + 工具定义组装为 LLM 请求
-let PreparedRequest { request, prompt_snapshot, .. } =
-    agent_loop.request_assembler.build_step_request(StepRequestConfig { ... }, &token_tracker)?;
+// replace_surface() — 原子替换 AgentLoop
+let _guard = self.runtime.rebuild_lock.lock().await;
+let next_loop = build_agent_loop(&next_surface, ...);
+*self.runtime.loop_.write().await = next_loop;   // 原子替换
 ```
 
-每个阶段是独立的 struct，有自己的测试。Claude Code 的四级压缩是内联代码，Astrcode 的三级准备是独立模块。
+MCP 服务器新连接、插件热加载、配置变更——不需要重启服务。正在运行的 turn 通过 `Arc` 引用计数安全持有旧版本，下一个 turn 自动使用新配置。这个能力是 Rust 的所有权系统给的——`Arc` 保证了旧引用不会被提前释放。
 
-#### 步骤 2：agent 分析输入并思考选择工具
+### 核心循环：同样的逻辑，不同的组织方式
 
-**Claude Code** 的 API 调用、流式解析、模型降级都在 `queryLoop()` 内部。
+两个系统的核心循环做的是同一件事：**LLM 调用 → 工具执行 → 循环**。但组织方式完全不同。
 
-**Astrcode** 把 LLM 交互封装在 `llm_cycle` 模块中，且在调用前多了两层策略检查：
+**Claude Code** 的 7 个 continue 站点全在一个函数里：
 
-```rust
-// turn_runner.rs — 调用 LLM 前的策略检查
-
-// 1. 策略引擎决定是否需要压缩
-let context_strategy = agent_loop.policy
-    .decide_context_strategy(&decision_input, &policy_ctx).await?;
-if matches!(context_strategy, ContextStrategy::Compact) {
-    // 执行压缩，然后 continue 回到循环开头
-}
-
-// 2. 策略引擎检查/重写请求（如敏感内容过滤）
-let request = agent_loop.policy
-    .check_model_request(request, &policy_ctx).await?;
-
-// 3. 实际调用 LLM
-let output = llm_cycle::generate_response(&provider, request, ...).await?;
-```
-
-注意：Claude Code 没有"策略引擎检查请求"这一步。Astrcode 的 `PolicyEngine` 是一个独立的 trait，可以插入不同的策略实现（全允许、全拒绝、条件判断），不需要改动循环代码。
-
-#### 步骤 3：agent 执行动作
-
-这是两个实现最相似的一步——都做了**只读工具并发、写入工具串行**的分区调度。
-
-**Claude Code**（`toolOrchestration.ts`）：
 ```typescript
-function partitionToolCalls(toolUseMessages, toolUseContext): Batch[] {
-  // 连续的只读工具合并到同一个批次 → 并发执行
-  // 有副作用的操作单独成批 → 串行执行
+while (true) {
+  // ... 365-520 行：消息准备（四级压缩）
+  // ... 559-863 行：流式 API 调用 + 工具执行
+  // ... 7 个 continue 分散在各处
+  // ... 每个都是不同的恢复路径
 }
 ```
 
-**Astrcode**（`tool_cycle.rs`）：
-```rust
-// 同样的分区逻辑
-if descriptor.concurrency_safe {
-    safe_calls.push(pending);   // → 并发执行
-} else {
-    unsafe_calls.push(pending); // → 串行执行
-}
-```
-
-但 Astrcode 多了三层决策：
+**Astrcode** 的 `turn_runner` 只做调度，逻辑在三个独立模块里：
 
 ```rust
-// tool_cycle.rs — 三层决策：策略 → 审批 → 执行
-match agent_loop.policy.check_capability_call(proposed_call, &policy_ctx).await? {
-    PolicyVerdict::Allow(allowed_call) => {
-        // 直接进入执行队列
-    },
-    PolicyVerdict::Deny { reason } => {
-        // 直接返回错误结果给 LLM
-    },
-    PolicyVerdict::Ask(pending) => {
-        // 阻塞等待用户审批
-        let resolution = agent_loop.approval.request(request, cancel).await?;
-        if resolution.approved { /* 进入执行队列 */ }
-        else { /* 返回拒绝结果 */ }
-    },
-}
-```
-
-Claude Code 的权限检查是 `canUseTool()` 函数散落在循环体内。Astrcode 把策略判断（PolicyEngine）和用户交互（ApprovalBroker）解耦成两个独立 trait——换策略不需要改循环代码，mock PolicyEngine 就能单独测工具执行。
-
-并发执行方面，Astrcode 使用 `FuturesUnordered` + `buffer_unordered(concurrency_limit)`：
-
-```rust
-// tool_cycle.rs — 安全工具并发执行
-stream::iter(safe_calls)
-    .map(move |pending| { /* 执行单个工具 */ })
-    .buffer_unordered(concurrency_limit) // 受限并发
-```
-
-#### 步骤 4：agent 获取反馈并更新策略
-
-两个实现都有**响应式压缩**和 **max_tokens 截断恢复**，但实现方式不同。
-
-**max_tokens 截断恢复**：
-
-```rust
-// turn_runner.rs — max_tokens 截断时注入 nudge 消息
-if output.finish_reason.is_max_tokens() {
-    if output_continuation_count < MAX_OUTPUT_CONTINUATION_ATTEMPTS {
-        output_continuation_count += 1;
-        conversation.messages.push(LlmMessage::User {
-            content: "Continue from where you left off. Do not repeat or summarize.",
-            origin: UserMessageOrigin::AutoContinueNudge,
-        });
-        continue; // 不终止 turn，继续下一轮 step
-    }
-}
-```
-
-Claude Code 也做同样的事，但用 `isMeta: true` 标记的 meta 消息。
-
-**响应式压缩**：
-
-```rust
-// turn_runner.rs — prompt too long 时自动压缩重试
-Err(error) => {
-    let is_too_long = is_prompt_too_long(&error);
-    if is_too_long && agent_loop.auto_compact_enabled()
-        && reactive_compact_attempts < MAX_REACTIVE_COMPACT_ATTEMPTS
-    {
-        reactive_compact_attempts += 1;
-        match maybe_compact_conversation(agent_loop, ...).await {
-            Ok(Some(compacted_view)) => {
-                conversation = ConversationView::new(compacted_view.messages);
-                continue 'step; // 压缩成功，重试
-            },
-            Ok(None) => {
-                return report_error(...); // 无可压缩内容
-            },
-            Err(compact_error) => { ... }
-        }
-    }
-}
-```
-
-两个系统的响应式压缩逻辑几乎一致——最多重试 3 次，压缩成功就 `continue` 回循环开头。区别在于 Astrcode 的压缩是由 `CompactionRuntime` 独立承载的，包含 pre/post hook 支持，允许插件在压缩前后做干预（比如自定义摘要）。
-
-#### 步骤 5：重复以上步骤，直到任务完成
-
-**Claude Code** 用 `State` 对象管理可变状态，每次 `continue` 整体替换。
-
-**Astrcode** 的 turn_runner 用 Rust 的 `'step: loop` 和局部变量：
-
-```rust
-// turn_runner.rs — 核心循环
-let mut conversation = ConversationView::new(state.messages.clone());
-let mut step_index = 0usize;
-let mut output_continuation_count = 0u8;
-let mut reactive_compact_attempts = 0usize;
-
 'step: loop {
-    // 1. 构建上下文包
-    // 2. 组装 prompt
-    // 3. 装配请求
-    // 4. 调用 LLM
-    let output = llm_cycle::generate_response(...).await;
-    // 5. 如果没 tool_calls → 结束
-    if tool_calls.is_empty() { return complete_turn(...); }
-    // 6. 有 tool_calls → 执行工具 → continue
-    tool_cycle::execute_tool_calls(...).await;
+    let output = llm_cycle::generate_response(...).await;  // LLM 调用
+    if output.finish_reason.is_max_tokens() { continue }   // 截断恢复
+    if tool_calls.is_empty() { break }                     // 正常结束
+    tool_cycle::execute_tool_calls(...).await;              // 工具执行
     step_index += 1;
 }
 ```
 
-循环本身的职责只有"调度"——LLM 调用细节在 `llm_cycle`，工具执行细节在 `tool_cycle`，上下文构建在 `ContextRuntime`。
-
-终止条件也类似：
-- `TurnOutcome::Completed` — LLM 无工具调用，自然结束
-- `TurnOutcome::Cancelled` — 取消信号触发
-- `TurnOutcome::Error { message }` — 不可恢复错误
+循环体里没有压缩逻辑（在 `CompactionRuntime` 里）、没有策略检查（在 `PolicyEngine` 里）、没有权限判断（在 `ApprovalBroker` 里）。**每个模块可以通过 mock 独立测试**——这对 Rust 尤其重要，因为编译时间惩罚全量集成测试。
 
 ### 对比总结
 
 | 维度 | Claude Code `queryLoop()` | Astrcode `AgentLoop` |
 |------|--------------------------|---------------------|
+| **语言** | TypeScript + Node.js | Rust + tokio |
 | **代码组织** | 1400 行巨型函数 | 8 个独立组件 + 3 个子模块 |
-| **输入准备** | 内联四级压缩 | ContextRuntime → PromptRuntime → RequestAssembler 三级流水线 |
-| **策略控制** | `canUseTool()` 散落在循环中 | 独立 PolicyEngine trait，可插拔 |
-| **审批流程** | 与权限检查耦合 | 独立 ApprovalBroker trait，与策略解耦 |
+| **状态管理** | 散变量 + 就地修改 | 每个组件独立持有状态 |
+| **错误恢复** | 7 个 continue 站点，隐式分类 | 结构化 match + `Result<T, E>` |
+| **策略控制** | `canUseTool()` 散落在循环中 | 独立 `PolicyEngine` trait，可插拔 |
 | **工具调度** | `partitionToolCalls()` 内联 | 独立 `tool_cycle` 模块，同样分区并发 |
-| **错误恢复** | 7 个 continue 站点，隐式阶段 | 结构化 match，显式 `'step` 循环标签 |
-| **压缩系统** | 内联 autocompact + reactive compact | 独立 CompactionRuntime，支持 hook 钩子 |
 | **可测试性** | 极难单测 1400 行循环 | 每个组件可独立 mock 和测试 |
-| **并发安全** | Node.js 单线程，无并发问题 | Rust 原生 async，`CancelToken` 协作式取消 |
+| **热替换** | 不支持 | `RwLock<Arc<AgentLoop>>` 原子替换 |
+
+**Claude Code 是"从实践中长出来的"**——Node.js 单线程的宽容让它能用一个巨型函数迭代出极致的优化。**Astrcode 是"被 Rust 逼出来的最佳实践"**——所有权、错误处理、编译时间这些约束，反而迫使架构变得更模块化、更可测试、更可扩展。
