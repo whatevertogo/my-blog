@@ -224,7 +224,7 @@ Astrcode 的缓解有三层：
 
 第三层是 checkpoint 后重写日志。老事件已经被快照覆盖后，正式 EventLog 只保留 tail events，避免长会话无限线性膨胀。
 
-这不是免费午餐。batch window 会让“事件提交到真正 fsync”之间有几十毫秒窗口；checkpoint rewrite 也引入了更复杂的文件替换流程。但相比每条事件同步一次，这是更可用的工程折中。
+这不是免费午餐。batch window 会让“事件提交到真正 fsync”之间有几十毫秒窗口；checkpoint rewrite 也引入了更复杂的文件替换流程。但相比每条事件同步一次，这是更可用的工程折中。但是rust已经帮我们做了很多性能优化。
 
 ## 缺点三：查询能力不如数据库
 
@@ -235,6 +235,8 @@ JSONL 非常适合 append 和顺序 replay，不适合复杂查询。
 Astrcode 当前的答案是投影：需要什么读模型，就从 EventLog 派生什么读模型。这个方向和 CQRS 一致，但也意味着以后如果分析查询变重，就应该补二级索引或数据库投影，而不是强行让 JSONL 承担所有查询。
 
 这也是 OpenCode 选择 SQLite 的优势所在。数据库不是敌人，它只是解决了另一个问题。
+
+但是我可以按需扩展。
 
 ## 缺点四：checkpoint 自身也有一致性成本
 
@@ -352,9 +354,9 @@ EventLog 的好处是把问题换成：“这是不是一个事实？如果是�
 
 第八，投影层主动过滤高频中间态。模型上下文只吸收它需要的稳定事件，UI 和审计可以看更细的事件。
 
+
 ## 还可以继续改进的地方
 
-我认为 Astrcode 现在的方向是对的，但还有几个值得继续加强的点。
 
 第一，schema 演进需要更明确的版本策略。typed event 一旦长期落盘，就需要 upcaster 或兼容层，而不是只靠 serde 默认值。
 
@@ -366,6 +368,8 @@ EventLog 的好处是把问题换成：“这是不是一个事实？如果是�
 
 第五，batch policy 可以根据事件类型调节。比如用户关键事件更快落盘，delta 类事件更积极合并。
 
+第六，我会将compact以上的内容到系统提示词的内容自动存在归档的session里面，组装的时候从compact后面开始组装，前面直接存档
+
 ## 结语
 
 这几套工具的设计都不是随便写的。
@@ -375,25 +379,3 @@ Claude Code 把 transcript resume 做到了很成熟；Codex 的 rollout 和 sta
 Astrcode 的 EventLog 选择的是另一种重心：把 Agent runtime 的事实保存下来，再由投影生成不同状态。它的成本更高，但它解决的是 transcript 和单一状态文件越做越重之后的问题。
 
 我的判断是：对 Astrcode 这种多 Agent、可恢复、可审计、上下文和 UI 状态需要分离的系统，EventLog 是值得的。关键不只是“用了 Event Sourcing”，而是有没有把它落成可运行的工程系统：批量写入、checkpoint、tail replay、turn lock、原子创建、投影快照。没有这些缓解，EventLog 只是漂亮概念；有了这些，它才真的能支撑长期演进。
-
-## 代码依据
-
-本文分析基于以下本地源码路径：
-
-- `D:\GitObjectsOwn\Astrcode\crates\adapter-storage\src\session\event_log.rs`
-- `D:\GitObjectsOwn\Astrcode\crates\adapter-storage\src\session\batch_appender.rs`
-- `D:\GitObjectsOwn\Astrcode\crates\adapter-storage\src\session\checkpoint.rs`
-- `D:\GitObjectsOwn\Astrcode\crates\adapter-storage\src\session\repository.rs`
-- `D:\GitObjectsOwn\Astrcode\crates\adapter-storage\src\session\turn_lock.rs`
-- `D:\GitObjectsOwn\Astrcode\crates\host-session\src\projection\agent_state.rs`
-- `D:\GitObjectsOwn\claude-code-sourcemap\restored-src\src\utils\sessionStorage.ts`
-- `D:\GitObjectsOwn\claude-code-sourcemap\restored-src\src\utils\conversationRecovery.ts`
-- `D:\GitObjectsOwn\codex\codex-rs\rollout\src\recorder.rs`
-- `D:\GitObjectsOwn\codex\codex-rs\rollout\src\state_db.rs`
-- `D:\GitObjectsOwn\kimi-cli\src\kimi_cli\session.py`
-- `D:\GitObjectsOwn\kimi-cli\src\kimi_cli\soul\context.py`
-- `D:\GitObjectsOwn\kimi-cli\src\kimi_cli\wire\file.py`
-- `D:\GitObjectsOwn\pi-mono\packages\coding-agent\src\core\session-manager.ts`
-- `D:\GitObjectsOwn\opencode\packages\opencode\src\storage\db.ts`
-- `D:\GitObjectsOwn\opencode\packages\opencode\src\session\index.ts`
-- `D:\GitObjectsOwn\opencode\packages\opencode\src\session\message-v2.ts`
