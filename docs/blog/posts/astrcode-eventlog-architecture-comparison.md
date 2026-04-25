@@ -1,7 +1,7 @@
 ---
 title: "Astrcode EventLog 底层实现：为什么我选择事件流，而不是只存聊天记录"
 date: 2026-04-26
-category: "ai say"
+category: "we say"
 tags:
   - Astrcode
   - Event Sourcing
