@@ -15,8 +15,6 @@ tags:
 description: "从 Astrcode 的 JSONL EventLog、50ms 批量写入、checkpoint 快照、投影恢复和 turn 锁讲起，对比 Claude Code、Codex、Kimi CLI、Pi Mono、OpenCode 的会话持久化设计。"
 ---
 
-# Astrcode EventLog 底层实现：为什么我选择事件流，而不是只存聊天记录
-
 AI Coding CLI 看起来都在做一件事：把一次会话存下来，下次可以 resume。
 
 但底层差异很大。有的工具存的是聊天 transcript，有的存的是模型 rollout，有的存的是 SQLite 里的 message/part，有的把会话做成 parent-child 树。Astrcode 的 EventLog 走的是另一条路：它不是把“当前聊天记录”当成唯一事实，而是把“发生过什么”作为事实，然后用投影把事实折叠成模型上下文、UI 状态、子任务树、输入队列、协作状态等读模型。
