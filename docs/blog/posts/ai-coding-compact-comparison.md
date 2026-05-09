@@ -1,14 +1,9 @@
 ---
-title: "agent的的"
+title: "一、agentloop智能体循环"
 date: 2026-05-09
 category: "Astrcodey"
 tags:
   - AI 编程工具
-  - Claude Code
-  - Codex
-  - OpenCode
-  - Kimi CLI
-  - Pi-mono
 description: "agentloop是agent的地基，没有agentloop就没有agent"
 ---
 
