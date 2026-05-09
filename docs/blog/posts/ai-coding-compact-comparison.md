@@ -175,7 +175,7 @@ LLM 报错
 ### claude code 的状态
 
 状态机 State 类型 (第 204-217 行)
-
+```typescript
   type State = {
     messages: Message[]                      // 累积的对话消息
     toolUseContext: ToolUseContext            // 工具调用上下文（工具列表、权限、agentId 等）
@@ -188,7 +188,8 @@ LLM 报错
     turnCount: number                         // 当前轮次计数
     transition: Continue | undefined          // 上一轮为何 continue（用于测试断言）
   }
-  除了这个还有很多很多的状态机
+```
+除了这个还有很多很多的状态机
 
 ### codex的状态
 
