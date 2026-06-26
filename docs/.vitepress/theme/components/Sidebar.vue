@@ -98,20 +98,22 @@ const selectCategory = (catName) => {
 
         <!-- 目录导航 -->
         <nav class="font-sans text-sm">
-          <div class="mb-4 text-xs font-semibold text-ink-faint uppercase tracking-widest">
+          <div class="directory-label mb-4 text-xs font-semibold text-ink-faint uppercase tracking-widest flex items-center gap-2">
+            <span class="directory-rule"></span>
             Directory
           </div>
           <ul class="flex flex-col gap-1">
             <!-- All Publications：activeCategory 为 null 时高亮 -->
             <li
               @click="selectCategory(null)"
-              class="py-2 px-3 cursor-pointer transition-colors duration-150"
+              class="nav-item py-2 px-3 cursor-pointer relative overflow-hidden transition-colors duration-200"
               :class="
                 activeCategory === null
-                  ? 'bg-paper-alt text-ink font-medium shadow-[rgba(0,0,0,0.05)_0px_2px_4px]'
+                  ? 'nav-active bg-paper-alt text-ink font-medium'
                   : 'text-ink-light hover:bg-paper-alt hover:text-ink'
               "
             >
+              <span class="nav-bar"></span>
               All Publications
             </li>
 
@@ -120,15 +122,16 @@ const selectCategory = (catName) => {
               <div
                 @click="selectCategory(cat.name)"
                 class="
-                  py-2 px-3 cursor-pointer transition-colors duration-150
-                  flex items-center justify-between
+                  nav-item py-2 px-3 cursor-pointer relative overflow-hidden
+                  flex items-center justify-between transition-colors duration-200
                 "
                 :class="
                   activeCategory === cat.name
-                    ? 'bg-paper-alt text-ink font-medium shadow-[rgba(0,0,0,0.05)_0px_2px_4px]'
+                    ? 'nav-active bg-paper-alt text-ink font-medium'
                     : 'text-ink-light hover:bg-paper-alt hover:text-ink'
                 "
               >
+                <span class="nav-bar"></span>
                 <span>{{ cat.name }}</span>
                 <span v-if="cat.subcategories && cat.subcategories.length > 0" class="text-paper-dark">
                   +
@@ -158,3 +161,41 @@ const selectCategory = (catName) => {
     </div>
   </aside>
 </template>
+
+<style scoped>
+/* 目录标签前的装饰短线 */
+.directory-rule {
+  display: inline-block;
+  width: 14px;
+  height: 1px;
+  background-color: var(--vp-c-text-3, #8f8a84);
+}
+
+/* active 项的左侧墨线指示条：默认收起，active 时从顶向下展开 */
+.nav-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background-color: var(--vp-c-text-1, #222222);
+  transform: scaleY(0);
+  transform-origin: top center;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.nav-active .nav-bar {
+  transform: scaleY(1);
+}
+
+/* hover 时也轻微显出指示条，增强反馈 */
+@media (hover: hover) {
+  .nav-item:hover .nav-bar {
+    transform: scaleY(0.4);
+    opacity: 0.5;
+  }
+  .nav-active:hover .nav-bar {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+</style>

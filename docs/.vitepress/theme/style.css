@@ -4,6 +4,7 @@
 
 /**
  * Anthropic Engineering Blog 风格深度定制 (暖白纸张 + 极简主义)
+ * 精致编辑风增强：纸张纹理 + 克制动效（色调保持不变）
  */
 
  :root {
@@ -147,4 +148,144 @@
 .vp-doc table {
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+/* ============================================================ *
+ *  精致编辑风增强（色调不变，仅增质感与克制动效）
+ * ============================================================ */
+
+/* ---- 纸张纹理底：极淡多层径向渐变，只增质感不改色 ---- */
+body,
+.VPContent,
+.VPDoc {
+  background-image:
+    radial-gradient(circle at 18% 12%, rgba(212, 163, 115, 0.045), transparent 42%),
+    radial-gradient(circle at 84% 88%, rgba(34, 34, 34, 0.028), transparent 46%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.5), transparent 70%);
+  background-attachment: fixed;
+}
+
+/* ---- 动效 keyframes ---- */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes drawLine {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes underlineGrow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* 尊重「减少动态效果」系统偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---- 滚动入场类：配合 v-reveal 指令使用 ---- */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---- 通用动画分割线：墨线从左展开 ---- */
+.ink-divider {
+  position: relative;
+  height: 1px;
+  width: 100%;
+  background-color: var(--vp-c-divider);
+  overflow: hidden;
+}
+.ink-divider::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: var(--vp-c-text-1);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+.ink-divider.animate::after {
+  animation: drawLine 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--divider-delay, 0ms);
+}
+
+/* ---- 正文链接：墨水下划线展开 ---- */
+.vp-doc :not(h1, h2, h3, h4, h5, h6) > a {
+  position: relative;
+  text-decoration: none !important;
+  transition: color 0.2s ease;
+}
+.vp-doc :not(h1, h2, h3, h4, h5, h6) > a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 1px;
+  background-color: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.vp-doc :not(h1, h2, h3, h4, h5, h6) > a:hover::after {
+  transform: scaleX(1);
+}
+
+/* ---- 引用块装饰：左侧墨线 ---- */
+.vp-doc blockquote {
+  position: relative;
+  border-left: 3px solid var(--vp-c-text-1) !important;
+  font-style: italic;
+}
+.vp-doc blockquote p {
+  color: var(--vp-c-text-2);
+}
+
+/* ---- 行内代码：贴合纸张色、墨线底框 ---- */
+.vp-doc :not(pre) > code {
+  background-color: var(--vp-c-bg-alt) !important;
+  border: 1px solid var(--vp-c-border) !important;
+  padding: 0.15em 0.4em !important;
+  font-weight: 500;
+}
+
+/* ---- 文章页标题：入场淡入 + 装饰墨线 ---- */
+.blog-post-title {
+  animation: fadeInUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.blog-post-title::after {
+  content: "";
+  display: block;
+  margin-top: 1.25rem;
+  width: 64px;
+  height: 3px;
+  background-color: var(--vp-c-text-1);
+  transform-origin: left center;
+  animation: drawLine 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
 }
