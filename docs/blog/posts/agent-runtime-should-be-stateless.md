@@ -10,7 +10,7 @@ description: "无状态是为了状态管理的分离，把复杂度从运行时
 
 ## 引言
 
-在 [上一篇](./ai-coding-compact-comparison) 里我介绍了 agentloop 的基本形态，并展示了 Claude Code 和 Codex 是如何用一层又一层的状态机来管理 Agent 生命周期的。我当时提了一句：**Astrcodey 的 agentloop 不管理状态，所有状态藏在 eventlog 里，通过 projection 推导出来。**
+在 [上一篇](./agent-loop) 里我介绍了 agentloop 的基本形态，并展示了 Claude Code 和 Codex 是如何用一层又一层的状态机来管理 Agent 生命周期的。我当时提了一句：**Astrcodey 的 agentloop 不管理状态，所有状态藏在 eventlog 里，通过 projection 推导出来。**
 
 这篇文章就把这句话展开讲清楚：为什么我认为 Agent 运行时应当是无状态的，以及 Astrcodey 的真实代码是怎么做到的。
 
