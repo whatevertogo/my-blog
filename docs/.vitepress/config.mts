@@ -1,14 +1,16 @@
 import { defineConfig } from 'vitepress'
 
+const base = '/my-blog/'
+
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
   title: "我的技术博客",
   description: "记录技术与生活，沉淀项目文档",
-  base: '/my-blog/', // 配置为目标仓库名
+  base,
   appearance: false, // 关闭自带的深色模式，使用暖白纸张风格
   
   head: [
-    ['link', { rel: 'icon', type: 'image/png', href: '/avatar.png' }],
+    ['link', { rel: 'icon', type: 'image/png', href: `${base}avatar.png` }],
   ],
   
   themeConfig: {
@@ -43,7 +45,7 @@ export default defineConfig({
     socialLinks: [
       {
         icon: {
-          svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12"/></svg>'
+          svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><defs><clipPath id="github-avatar-clip"><circle cx="12" cy="12" r="12"/></clipPath></defs><image href="${base}avatar.png" width="24" height="24" clip-path="url(#github-avatar-clip)" preserveAspectRatio="xMidYMid slice"/></svg>`
         },
         link: 'https://github.com/whatevertogo',
         ariaLabel: 'GitHub'

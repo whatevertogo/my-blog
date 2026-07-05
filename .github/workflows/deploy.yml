@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    # Keep the Pages deployment fresh even when the blog is quiet.
+    - cron: '27 3 * * 1'
 
 permissions:
   contents: read
@@ -12,7 +15,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -28,12 +31,18 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
       
       - name: Install dependencies
         run: npm ci
       
       - name: Build with VitePress
         run: npm run docs:build
+
+      - name: Disable Jekyll processing
+        run: touch docs/.vitepress/dist/.nojekyll
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

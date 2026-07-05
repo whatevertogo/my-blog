@@ -133,9 +133,6 @@
   width: 20px !important;
   height: 20px !important;
   border-radius: 50%;
-  background-image: url('/avatar.png');
-  background-size: cover;
-  background-position: center;
 }
 .VPSocialLink:hover svg {
   transform: scale(1.1);
