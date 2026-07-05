@@ -125,6 +125,53 @@ GitHub inline comment 对位置很挑。模型说“第 42 行有问题”不够
 
 插件会尝试找附近的 RIGHT 行，但不会硬造一个位置。宁愿少发一条，也不要在错误位置上装作很懂。
 
+## 提示词怎么写
+
+这个插件的 prompt 不是从零写的。它的底子其实来自我平时用的 `reviewnow` skill。
+
+`reviewnow` 做的事情很朴素：先确定 review 范围，再读 diff 和项目上下文，能跑验证就跑验证，然后从几个角度挑真实问题。它不鼓励泛泛而谈，也不鼓励“这里可以更优雅”这种没证据的建议。一个 finding 至少要说清楚几件事：文件行号、问题是什么、影响是什么、证据在哪里、怎么修。
+
+我把这套东西搬进插件时，删掉了很多不适合自动化的部分。人工 review 可以写一段自然语言，可以临时判断哪些话该说、哪些话不该说。插件不行。插件需要稳定格式，需要能被 Rust 校验，需要能发到 GitHub 的具体位置。
+
+所以目录里最后变成了几份 prompt：
+
+```text
+pr-review-bot.md
+orientation-review.md
+file-review.md
+global-review.md
+aggregate-review.md
+```
+
+`pr-review-bot.md` 是底色。它告诉模型：你不是聊天助手，你是 whatevertogo 的替身 reviewer。你要像 maintainer 一样看 PR，优先找这次 diff 引入或暴露出来的问题，不要写泛泛建议。
+
+这里保留了 `reviewnow` 里最重要的几条：
+
+- 先看真实 diff，不要凭感觉 review。
+- 有证据再报问题，低置信度的放 observation。
+- 从 Correctness、Security、Reliability/Performance、Tests/API Contract 几个角度看。
+- severity 按影响分，不要因为问题属于测试或设计就自动降成 P3。
+- 每个 finding 都要有 evidence、project context、impact、fix。
+
+我故意没有把 Architecture 单独列出来。插件里的 global pass 会看跨文件和架构风险，但最后还是要落到具体影响上。否则模型很容易开始写“架构上建议进一步抽象”这种没法处理的废话。
+
+剩下几份 prompt 按阶段来。orientation 先看 PR 元信息、仓库记忆、checks 和文件清单；file pass 只看当前 shard；global pass 再回头找跨文件问题；aggregate 写的是合并阶段的规矩：去重，保留最高 severity，不允许凭空创造新 finding。最后 Rust 还会再合并和校验一遍。
+
+我后来发现，prompt 里最有用的不是“请认真 review”。这种话基本没用。真正有用的是限制：
+
+- 只能返回 JSON
+- 不要调用 GitHub API
+- 不要写最终评论
+- finding 必须落在给出的 `RIGHT` / `LEFT` 行上
+- 看过的文件要写进 `files_reviewed`
+- 不要为了显得完整而写“看起来没问题”这种废话
+
+这些限制很硬，读起来也不优雅。但 prompt 如果太优雅，模型就会开始自由发挥。自由发挥在聊天里挺可爱，在自动 review 里就容易变事故。
+
+还有一个细节：prompt 会带上 repo memory、PR memory、路径级说明和 deterministic checks。模型不是只看 diff，它会知道这个仓库以前踩过什么坑，当前 PR 有没有失败的 checks，哪些文件没有 patch、不能 inline comment。
+
+我不追求 prompt 写得像一篇漂亮文章。它更像一份任务单：你只能看这些材料，只能输出这种格式，只能在这些位置提问题。剩下的交给 Rust 校验。
+
 ## 发评论要克制
 
 默认最多发 12 条 inline comments。P3 通常只进 summary，除非触发评论明显是在要 nitpick。
@@ -184,22 +231,6 @@ review 用的几个 prompt 在 `prompts/` 目录里，然后通过 `include_str!
 我不想让这个插件还依赖某个本地 skill 目录。插件安装以后，最好只依赖这些东西：插件系统、`gh`、Astrcodey、GitHub。路径依赖越少，部署时越少出现“我这里明明可以”的问题。
 
 这也符合我对内置插件的理解：能靠插件包自己解决的，就不要去摸项目里的其他东西。
-
-## 我现在还不满意什么
-
-最大的问题是 `review.rs` 太长。
-
-它现在管 checkout、上下文收集、prompt、JSON 修复、finding 校验、GitHub 发布、memory 更新。功能上能跑，测试也能覆盖一部分，但读起来已经有点重。
-
-后面我大概会拆成几块：
-
-- `github_context`：PR 元信息、diff、checks
-- `review_pipeline`：pass 规划和输出合并
-- `finding_validation`：finding 到 diff line 的校验
-- `publisher`：GitHub review 和 final comment
-- `memory`：repo/PR 记忆
-
-不过我不想为了拆而拆。worker 这类代码很容易拆成一堆名字好听的小模块，最后调试时还是要来回跳。等失败案例再多一点，边界会更自然。
 
 ## 结尾
 
