@@ -10,8 +10,7 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  pages: read
 
 concurrency:
   group: pages
@@ -50,6 +49,9 @@ jobs:
           path: docs/.vitepress/dist
 
   deploy:
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -60,3 +62,44 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  keepalive:
+    if: github.event_name == 'schedule'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Keep scheduled deployment active
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          days_since_commit() {
+            local commit_epoch
+            commit_epoch="$(git log -1 --format=%ct "$1")"
+            echo $(( ($(date +%s) - commit_epoch) / 86400 ))
+          }
+
+          inactive_days="$(days_since_commit HEAD)"
+
+          if (( inactive_days < 45 )); then
+            echo "Last repository commit was ${inactive_days} days ago; no keepalive needed."
+            exit 0
+          fi
+
+          git fetch origin "+refs/heads/${GITHUB_REF_NAME}:refs/remotes/origin/${GITHUB_REF_NAME}"
+          inactive_days="$(days_since_commit "origin/${GITHUB_REF_NAME}")"
+
+          if (( inactive_days < 45 )); then
+            echo "The repository was updated during this run; no keepalive needed."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch --force-create keepalive "origin/${GITHUB_REF_NAME}"
+          git commit --allow-empty -m "chore: keep scheduled deployment active [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

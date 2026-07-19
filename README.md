@@ -45,6 +45,8 @@ description: "一句话摘要"
 
 推送到 `main` 即触发 `.github/workflows/deploy.yml`，自动发布到 GitHub Pages。
 
+工作流也会每周重新部署一次。若仓库连续 45 天没有新提交，它会创建一个空的保活提交，避免 GitHub 因公开仓库长期无活动而在 60 天后停用定时工作流。
+
 ## License
 
 MIT
