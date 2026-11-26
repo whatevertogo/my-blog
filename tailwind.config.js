@@ -19,6 +19,8 @@ export default {
         },
         brand: {
           DEFAULT: '#d4a373', // Claude-ish accent color
+          2: '#cc9966',
+          3: '#b3804d',
         }
       },
       fontFamily: {

@@ -1,13 +1,7 @@
 ---
-title: 友链
+title: 我的友链
 ---
 
-<!-- 友链页面会自动重定向至具体列表 -->
+这里是我的一些友链小伙伴，欢迎互链。
 
-<script setup>
-import { onMounted } from 'vue'
-
-onMounted(() => {
-  window.location.href = '/my-blog/links/mylinks'
-})
-</script>
+<FriendLinks />

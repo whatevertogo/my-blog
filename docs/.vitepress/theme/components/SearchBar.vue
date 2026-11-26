@@ -10,6 +10,14 @@ defineProps({
     type: [String, null],
     default: null,
   },
+  selectedTag: {
+    type: [String, null],
+    default: null,
+  },
+  sortOrder: {
+    type: String,
+    default: 'desc',
+  },
   filteredCount: {
     type: Number,
     required: true,
@@ -20,7 +28,7 @@ defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'toggle-tag', 'toggle-sort', 'clear-filters'])
 
 const focused = ref(false)
 </script>
@@ -28,10 +36,24 @@ const focused = ref(false)
 <template>
   <div>
     <!-- 搜索栏 -->
-    <div class="mb-12 border-b border-paper-dark pb-8">
-      <div class="font-sans text-sm text-ink-faint mb-3 uppercase tracking-wide">
-        Search / <span class="font-medium text-ink">{{ activeCategory ? activeCategory : 'Global' }}</span>
+    <div class="mb-10 border-b border-paper-dark pb-7">
+      <div class="flex items-center justify-between font-sans text-sm text-ink-faint mb-3 uppercase tracking-wide">
+        <div>
+          Search / <span class="font-medium text-ink">{{ activeCategory ? activeCategory : 'Global' }}</span>
+          <template v-if="selectedTag">
+            <span class="mx-1.5 text-paper-dark">/</span>
+            <span class="font-medium text-ink">#{{ selectedTag }}</span>
+          </template>
+        </div>
+        <button
+          v-if="activeCategory || selectedTag || modelValue"
+          @click="emit('clear-filters')"
+          class="text-[11px] uppercase tracking-widest text-ink-light hover:text-ink border-b border-paper-dark hover:border-ink pb-0.5 transition-colors"
+        >
+          Reset Filters ×
+        </button>
       </div>
+
       <div
         class="search-wrap relative"
         :class="{ 'is-focused': focused }"
@@ -59,32 +81,56 @@ const focused = ref(false)
           placeholder="Search by keywords, tags, or concepts..."
           class="
             w-full bg-paper-alt/20 border border-paper-dark
-            ps-14 pe-4 py-5 text-xl font-serif text-ink
+            ps-14 pe-12 py-4 md:py-5 text-lg md:text-xl font-serif text-ink
             placeholder:text-ink-faint
             focus:outline-none focus:border-ink transition-colors duration-300
             rounded-none
           "
         />
+        <!-- 清空输入框按钮 -->
+        <button
+          v-if="modelValue"
+          @click="emit('update:modelValue', '')"
+          aria-label="Clear search"
+          class="absolute right-4 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center text-ink-faint hover:text-ink transition-colors"
+        >
+          ✕
+        </button>
         <!-- 聚焦时底部墨线展开 -->
         <span class="focus-underline"></span>
       </div>
-      <!-- 热门标签 -->
-      <div class="flex items-center gap-3 mt-4 text-sm font-sans text-ink-light">
-        <span>Trending:</span>
+
+      <!-- 热门标签（可交互筛选） -->
+      <div class="flex flex-wrap items-center gap-2.5 mt-4 text-sm font-sans text-ink-light">
+        <span class="text-xs uppercase tracking-widest text-ink-faint mr-1">Topics:</span>
         <button
           v-for="tag in hotTags"
           :key="tag"
-          class="trend-tag border border-paper-dark px-3 py-0.5 relative overflow-hidden"
+          @click="emit('toggle-tag', tag)"
+          class="trend-tag border px-3 py-0.5 relative overflow-hidden cursor-pointer text-xs tracking-wide"
+          :class="
+            selectedTag === tag
+              ? 'is-active border-ink bg-ink text-paper'
+              : 'border-paper-dark text-ink-light'
+          "
         >
           <span class="trend-label relative z-10">{{ tag }}</span>
         </button>
       </div>
     </div>
 
-    <!-- 结果计数和排序 -->
-    <div class="results-bar flex justify-between items-end mb-4 font-sans text-xs uppercase tracking-widest text-ink-light border-b border-paper-dark pb-2">
-      <span>{{ filteredCount }} Results</span>
-      <span>Sort by: <span class="text-ink font-semibold cursor-pointer">Latest ↓</span></span>
+    <!-- 结果计数和排序切换 -->
+    <div class="results-bar flex justify-between items-end mb-2 font-sans text-xs uppercase tracking-widest text-ink-light border-b border-paper-dark pb-2.5">
+      <span class="tabular-nums">{{ filteredCount }} {{ filteredCount === 1 ? 'Result' : 'Results' }}</span>
+      <button
+        @click="emit('toggle-sort')"
+        class="uppercase tracking-widest text-ink-light hover:text-ink transition-colors cursor-pointer"
+      >
+        Sort by:
+        <span class="text-ink font-semibold">
+          {{ sortOrder === 'desc' ? 'Latest ↓' : 'Oldest ↑' }}
+        </span>
+      </button>
     </div>
   </div>
 </template>
@@ -118,9 +164,9 @@ const focused = ref(false)
 
 /* 热门标签：hover 时墨水从底部填充上推 */
 .trend-tag {
-  transition: border-color 0.25s ease, color 0.25s ease;
+  transition: border-color 0.25s ease, color 0.25s ease, background-color 0.25s ease;
 }
-.trend-tag::before {
+.trend-tag:not(.is-active)::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -133,19 +179,14 @@ const focused = ref(false)
   transition: color 0.25s ease;
 }
 @media (hover: hover) {
-  .trend-tag:hover {
+  .trend-tag:not(.is-active):hover {
     border-color: var(--vp-c-text-1, #222222);
   }
-  .trend-tag:hover::before {
+  .trend-tag:not(.is-active):hover::before {
     transform: translateY(0);
   }
-  .trend-tag:hover .trend-label {
+  .trend-tag:not(.is-active):hover .trend-label {
     color: var(--vp-c-bg, #f9f6f0);
   }
-}
-
-/* 结果计数条装饰：底部已有 border，给“Latest”轻微强调 */
-.results-bar span:last-child {
-  position: relative;
 }
 </style>
